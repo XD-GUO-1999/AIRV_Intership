@@ -1197,7 +1197,7 @@ module decoder
 
           // Check if funct3 is 000 as specified
           if (instr.rtype.funct3 == 3'b001) begin
-            instruction_o.op = ariane_pkg::MAC4;  // Attach the DOT8 label we registered in ariane_pkg
+            instruction_o.op = ariane_pkg::MAC8IM;  // Attach the DOT8 label we registered in ariane_pkg
           end else begin
             illegal_instr = 1'b1;                 // If funct3 is incorrect, trigger an illegal instruction exception
           end
