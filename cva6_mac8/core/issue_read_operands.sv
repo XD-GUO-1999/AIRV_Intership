@@ -40,13 +40,6 @@ module issue_read_operands
     output logic [REG_ADDR_SIZE-1:0] rs3_o,
     input rs3_len_t rs3_i,
     input logic rs3_valid_i,
-    output logic [REG_ADDR_SIZE-1:0] rs4_o,
-    input riscv::xlen_t rs4_i,
-    input logic rs4_valid_i,
-    // output logic [REG_ADDR_SIZE-1:0] rs5_o,  // read port for rd (accumulator read for MAC8IM)
-    // input riscv::xlen_t rs5_i,
-    // input logic rs5_valid_i,
-
     // get clobber input
     input fu_t [2**REG_ADDR_SIZE-1:0] rd_clobber_gpr_i,
     input fu_t [2**REG_ADDR_SIZE-1:0] rd_clobber_fpr_i,
@@ -96,9 +89,6 @@ module issue_read_operands
   rs3_len_t operand_c_regfile, operand_c_fpr, operand_c_gpr;  // third operand from fp regfile or gp regfile if NR_RGPR_PORTS == 3
   // output flipflop (ID <-> EX)
   riscv::xlen_t operand_a_n, operand_a_q, operand_b_n, operand_b_q, imm_n, imm_q, imm_forward_rs3;
-  riscv::xlen_t operand_c_n, operand_c_q;  // 3rd operand (rs3) for MAC8IM
-  riscv::xlen_t operand_d_n, operand_d_q;  // 4th operand (rs4) for MAC8IM
-  //riscv::xlen_t operand_e_n, operand_e_q;  // 5th operand (rs5/rd) for MAC8IM accumulator
 
   logic        alu_valid_q;
   logic        mult_valid_q;
@@ -116,7 +106,7 @@ module issue_read_operands
   fu_t fu_n, fu_q;  // functional unit to use
 
   // forwarding signals
-  logic forward_rs1, forward_rs2, forward_rs3, forward_rs4;//, forward_rs5;
+  logic forward_rs1, forward_rs2, forward_rs3;
 
   // original instruction stored in tval
   riscv::instruction_t orig_instr;
@@ -133,9 +123,6 @@ module issue_read_operands
   assign fu_data_o.operation = operator_q;
   assign fu_data_o.trans_id  = trans_id_q;
   assign fu_data_o.imm       = imm_q;
-  assign fu_data_o.operand_c = operand_c_q;  // 3rd operand (rs3)
-  assign fu_data_o.operand_d = operand_d_q;  // 4th operand (rs4)
-  //assign fu_data_o.operand_e = operand_e_q;  // 5th operand (rs5/rd accumulator)
   assign alu_valid_o         = alu_valid_q;
   assign branch_valid_o      = branch_valid_q;
   assign lsu_valid_o         = lsu_valid_q;
@@ -178,17 +165,11 @@ module issue_read_operands
     forward_rs1 = 1'b0;
     forward_rs2 = 1'b0;
     forward_rs3 = 1'b0;  // FPR only
-    forward_rs4 = 1'b0;  // for MAC8IM
-    //forward_rs5 = 1'b0;  // for MAC8IM accumulator read
     // poll the scoreboard for those values
     rs1_o = issue_instr_i.rs1;
     rs2_o = issue_instr_i.rs2;
-    //modification: use the rd as 3rd register if we use mac8im
-    rs3_o = (issue_instr_i.op == ariane_pkg::MAC8IM) ? issue_instr_i.rs3[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0];
-    //modification: rs4 for mac8im
-    rs4_o = (issue_instr_i.op == ariane_pkg::MAC8IM) ? issue_instr_i.rs4[REG_ADDR_SIZE-1:0] : '0;
-    //modification: rs5 reads rd initial value (accumulator) for mac8im
-    //rs5_o = (issue_instr_i.op == ariane_pkg::MAC8IM) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : '0; 
+    //modification: use the rd as 3rd regisiter if we use mac4
+    rs3_o = (issue_instr_i.op == ariane_pkg::MAC8IM) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0]; 
 
     // 0. check that we are not using the zimm type in RS1
     //    as this is an immediate we do not have to wait on anything here
@@ -231,9 +212,9 @@ module issue_read_operands
             issue_instr_i.op
         )) ? rd_clobber_fpr_i[issue_instr_i.result[REG_ADDR_SIZE-1:0]] != NONE :
         //modification
-            (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC8IM) && CVA6Cfg.NrRgprPorts == 3 ?
-            rd_clobber_gpr_i[(issue_instr_i.op == ariane_pkg::MAC8IM) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0]] != NONE : 0) begin
-        //modofication : when we use MAC8IM and offload, judge rs3 is avaliable or not
+            (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC4) && CVA6Cfg.NrRgprPorts == 3 ?
+            rd_clobber_gpr_i[(issue_instr_i.op == ariane_pkg::MAC4) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0]] != NONE : 0) begin
+        //modofication : when we use MAC4 and offload, judge rs3 is avaliable or not
       // if the operand is available, forward it. CSRs don't write to/from FPR so no need to check
       if (rs3_valid_i) begin
         forward_rs3 = 1'b1;
@@ -241,26 +222,6 @@ module issue_read_operands
         stall = 1'b1;
       end
     end
-
-    // Check rs4 for MAC8IM instruction
-    if ((issue_instr_i.op == ariane_pkg::MAC8IM) && 
-        rd_clobber_gpr_i[issue_instr_i.rs4[REG_ADDR_SIZE-1:0]] != NONE) begin
-      if (rs4_valid_i) begin
-        forward_rs4 = 1'b1;
-      end else begin  // the operand is not available -> stall
-        stall = 1'b1;
-      end
-    end
-
-    // Check rs5 (rd initial value as accumulator) for MAC8IM instruction
-    // if ((issue_instr_i.op == ariane_pkg::MAC8IM) && 
-    //     rd_clobber_gpr_i[issue_instr_i.rd[REG_ADDR_SIZE-1:0]] != NONE) begin
-    //   if (rs5_valid_i) begin
-    //     forward_rs5 = 1'b1;
-    //   end else begin  // the operand is not available -> stall
-    //     stall = 1'b1;
-    //   end
-    // end
   end
 
   // third operand from fp regfile or gp regfile if NR_RGPR_PORTS == 3
@@ -275,16 +236,12 @@ module issue_read_operands
     // default is regfiles (gpr or fpr)
     operand_a_n = operand_a_regfile;
     operand_b_n = operand_b_regfile;
-    // new operands for MAC8IM (5 operands total)
-    operand_c_n = rs3_i;  // default: rs3 value
-    operand_d_n = rs4_i;  // default: rs4 value
-    //operand_e_n = rs5_i;  // default: rs5 value (rd accumulator initial value)
     // immediates are the third operands in the store case
     // for FP operations, the imm field can also be the third operand from the regfile
-    if (CVA6Cfg.NrRgprPorts == 5) begin
+    if (CVA6Cfg.NrRgprPorts == 3) begin
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} :
-          (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC8IM) ? operand_c_regfile : issue_instr_i.result; //modification : ajout MAC8IM
+          (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC4) ? operand_c_regfile : issue_instr_i.result; //modification : ajout MAC4
     end else begin
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} : issue_instr_i.result;
@@ -305,16 +262,6 @@ module issue_read_operands
       imm_n = imm_forward_rs3;
     end
 
-    // forward rs4 (3rd operand for MAC8IM)
-    if (forward_rs4) begin
-      operand_d_n = rs4_i;
-    end
-
-    // forward rs5 (accumulator initial value for MAC8IM)
-    // if (forward_rs5) begin
-    //   operand_e_n = rs5_i;
-    // end
-
     // use the PC as operand a
     if (issue_instr_i.use_pc) begin
       operand_a_n = {
@@ -323,10 +270,10 @@ module issue_read_operands
     end
 
     // use the zimm as operand a
-    // if (issue_instr_i.use_zimm) begin
-    //   // zero extend operand a
-    //   operand_a_n = {{riscv::XLEN - 5{1'b0}}, issue_instr_i.rs1[4:0]};
-    // end
+    if (issue_instr_i.use_zimm) begin
+      // zero extend operand a
+      operand_a_n = {{riscv::XLEN - 5{1'b0}}, issue_instr_i.rs1[4:0]};
+    end
     // or is it an immediate (including PC), this is not the case for a store, control flow, and accelerator instructions
     // also make sure operand B is not already used as an FP operand
     if (issue_instr_i.use_imm && (issue_instr_i.fu != STORE) && (issue_instr_i.fu != CTRL_FLOW) && (issue_instr_i.fu != ACCEL) && !(CVA6Cfg.FpPresent && is_rs2_fpr(
@@ -496,7 +443,7 @@ module issue_read_operands
   logic [CVA6Cfg.NrCommitPorts-1:0]                  we_pack;
 
   if (CVA6Cfg.NrRgprPorts == 3) begin : gen_rs3
-    assign raddr_pack = {issue_instr_i.op == ariane_pkg::MAC8IM} ? //modification if we use MAC8IM, the 3rd port should read rd to load rs3
+    assign raddr_pack = {issue_instr_i.op == ariane_pkg::MAC4} ? //modification if we use MAC4, the 3rd port should read rd to load rs3
                         {issue_instr_i.rd[4:0], issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]} :
                         {issue_instr_i.result[4:0], issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]};
   end else begin : gen_no_rs3
