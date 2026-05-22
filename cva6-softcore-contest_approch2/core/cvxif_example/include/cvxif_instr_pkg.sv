@@ -42,7 +42,7 @@ package cvxif_instr_pkg;
               exc : 1'b0
           }
       },
-      //modifcation: to recognize the custom0 opcode
+      //modification: to recognize the custom0 opcode
         '{
             instr: 32'b00000_00_00000_00000_0_01_00000_0001011,  // custom0 opcode
             mask: 32'b11111_11_00000_00000_1_11_00000_1111111,
