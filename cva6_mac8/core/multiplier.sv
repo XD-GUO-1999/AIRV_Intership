@@ -73,14 +73,14 @@ module multiplier
   fu_op operator_d, operator_q;
   logic [riscv::XLEN*2-1:0] mult_result_d, mult_result_q;
 
-  //modification the logic calculate of MAC4
-  logic [31:0] mac4_res_d, mac4_res_q;
+  //modification the logic calculate of MAC8IM
+  logic [31:0] mac8im_res_d, mac8im_res_q;
 
-  assign mac4_res_d = ($signed({1'b0, operand_a_i[7:0]})*$signed(operand_b_i[7:0])) + 
-                      ($signed({1'b0, operand_a_i[15:8]})*$signed(operand_b_i[15:8])) + 
-                      ($signed({1'b0, operand_a_i[23:16]})*$signed(operand_b_i[23:16])) + 
-                      ($signed({1'b0, operand_a_i[31:24]})*$signed(operand_b_i[31:24])) +
-                        $signed(operand_c_i); 
+  assign mac8im_res_d = ($signed({1'b0, operand_a_i[7:0]})*$signed(operand_b_i[7:0])) + 
+                        ($signed({1'b0, operand_a_i[15:8]})*$signed(operand_b_i[15:8])) + 
+                        ($signed({1'b0, operand_a_i[23:16]})*$signed(operand_b_i[23:16])) + 
+                        ($signed({1'b0, operand_a_i[31:24]})*$signed(operand_b_i[31:24])) +
+                          $signed(operand_c_i); 
 
   // control registers
   logic sign_a, sign_b;
@@ -91,7 +91,7 @@ module multiplier
   assign mult_trans_id_o = trans_id_q;
   assign mult_ready_o = 1'b1;
 
-  assign mult_valid      = mult_valid_i && (operation_i inside {MUL, MULH, MULHU, MULHSU, MULW, CLMUL, CLMULH, CLMULR, ariane_pkg::MAC4});
+  assign mult_valid      = mult_valid_i && (operation_i inside {MUL, MULH, MULHU, MULHSU, MULW, CLMUL, CLMULH, CLMULR, ariane_pkg::MAC8IM});
 
   // Sign Select MUX
   always_comb begin
@@ -125,7 +125,7 @@ module multiplier
 
   always_comb begin : p_selmux
     unique case (operator_q)
-      ariane_pkg::MAC4:    result_o = mac4_res_q; //modification: output of mac4
+      ariane_pkg::MAC8IM:    result_o = mac8im_res_q; //modification: output of mac8im
       MULH, MULHU, MULHSU: result_o = mult_result_q[riscv::XLEN*2-1:riscv::XLEN];
       MULW:                result_o = sext32(mult_result_q[31:0]);
       CLMUL:               result_o = clmul_q;
@@ -155,7 +155,7 @@ module multiplier
       trans_id_q    <= '0;
       operator_q    <= MUL;
       mult_result_q <= '0;
-      mac4_res_q <= '0;
+      mac8im_res_q <= '0;
     end else begin
       // Input silencing
       trans_id_q    <= trans_id_i;
@@ -163,7 +163,7 @@ module multiplier
       mult_valid_q  <= mult_valid;
       operator_q    <= operator_d;
       mult_result_q <= mult_result_d;
-      mac4_res_q <= mac4_res_d;
+      mac8im_res_q <= mac8im_res_d;
     end
   end
 endmodule

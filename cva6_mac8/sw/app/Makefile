@@ -55,7 +55,8 @@ bmarks = \
 	spmv \
 	pmp \
 	mnist \
-	simple_mac
+	simple_mac\
+	test
 
 #--------------------------------------------------------------------
 # Build rules

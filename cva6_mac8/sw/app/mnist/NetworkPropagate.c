@@ -36,18 +36,24 @@ static void macsOnRange_with_mac4(const UDATA_T* __restrict inputs,
     int32_t sum = *weightedSum;
     int iter = 0;
 
-    for (; iter <= nb_iterations - 4; iter += 4) {
+    for (; iter <= nb_iterations - 8; iter += 8) {
         const UDATA_T *p_in = inputs + iter;
         const UDATA_T *p_wt = weights + iter;
+        const UDATA_T *p_in_low = inputs + iter - 4;
+        const UDATA_T *p_wt_low = weights + iter - 4;
         
         asm volatile(
         "lw t1, 0(%[p_in]) \n\t"
         "lw t2, 0(%[p_wt]) \n\t"
-        "mac4 %[sum], t1, t2 \n\t"
+        "lw t3, 0(%[p_in_low]) \n\t"
+        "lw t4, 0(%[p_wt_low]) \n\t"
+        "mac8im %[sum], t1, t2 \n\t"
         : [sum] "+r" (sum)
         : [p_in] "r" (p_in), 
-        [p_wt] "r" (p_wt)
-        : "t1", "t2"
+        [p_wt] "r" (p_wt),
+        [p_in_low] "r" (p_in_low),
+        [p_wt_low] "r" (p_wt_low)
+        : "t1", "t2", "t3", "t4"
         );
     }
 

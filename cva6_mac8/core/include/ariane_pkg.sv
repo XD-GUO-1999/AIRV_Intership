@@ -444,7 +444,7 @@ package ariane_pkg;
     MULHSU,
     MULW,
     //modification
-    MAC4,
+    MAC8IM,
     //modification
   
     // Divisions
@@ -576,6 +576,9 @@ package ariane_pkg;
     riscv::xlen_t             operand_a;
     riscv::xlen_t             operand_b;
     riscv::xlen_t             imm;
+    riscv::xlen_t             operand_c;  // for 3rd operand (e.g., rs3 for MAC8IM)
+    riscv::xlen_t             operand_d;  // for 4th operand (e.g., rs4 for MAC8IM)
+    riscv::xlen_t             operand_e;  // for 5th operand (e.g., rs5/rd for MAC8IM accumulator)
     logic [TRANS_ID_BITS-1:0] trans_id;
   } fu_data_t;
 
@@ -699,6 +702,8 @@ package ariane_pkg;
     fu_op op;  // operation to perform in each functional unit
     logic [REG_ADDR_SIZE-1:0] rs1;  // register source address 1
     logic [REG_ADDR_SIZE-1:0] rs2;  // register source address 2
+    logic [REG_ADDR_SIZE-1:0] rs3;  // register source address 3 (for MAC8IM)
+    logic [REG_ADDR_SIZE-1:0] rs4;  // register source address 4 (for MAC8IM)
     logic [REG_ADDR_SIZE-1:0] rd;  // register destination address
     riscv::xlen_t result;  // for unfinished instructions this field also holds the immediate,
                            // for unfinished floating-point that are partly encoded in rs2, this field also holds rs2
