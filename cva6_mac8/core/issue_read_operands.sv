@@ -252,16 +252,16 @@ module issue_read_operands
       end
     end
         //modification: 
-    if (issue_instr_i.op == ariane_pkg::MAC8IM)begin
-      if(rd_clobber_gpr_i[rs4_o] != NONE)begin
-          if(rs4_valid_i) forward_rs4 = 1'b1;
-          else stall = 1'b1;
-      end
-      if(rd_clobber_gpr_i[rs4_o] != NONE)begin
-          if(rs5_valid_i) forward_rs5 = 1'b1;
-          else stall = 1'b1;
-      end
-    end
+    // if (issue_instr_i.op == ariane_pkg::MAC8IM)begin
+    //   if(rd_clobber_gpr_i[rs4_o] != NONE)begin
+    //       if(rs4_valid_i) forward_rs4 = 1'b1;
+    //       //else stall = 1'b1;
+    //   end
+    //   if(rd_clobber_gpr_i[rs5_o] != NONE)begin
+    //       if(rs5_valid_i) forward_rs5 = 1'b1;
+    //       //else stall = 1'b1;
+    //   end
+    // end
   end
 
   // third operand from fp regfile or gp regfile if NR_RGPR_PORTS == 3
@@ -281,7 +281,7 @@ module issue_read_operands
     operand_e_n = operand_e_regfile;
     // immediates are the third operands in the store case
     // for FP operations, the imm field can also be the third operand from the regfile
-    if (CVA6Cfg.NrRgprPorts == 3) begin
+    if (CVA6Cfg.NrRgprPorts == 5) begin//modification 3 -> 5
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} :
           (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC8IM) ? operand_c_regfile : issue_instr_i.result; //modification : ajout MAC4
@@ -493,9 +493,9 @@ module issue_read_operands
 
   if (CVA6Cfg.NrRgprPorts == 5) begin : gen_rs5 //modification
   assign raddr_pack = {
-        (issue_instr_i.op == ariane_pkg::MAC8IM) ? issue_instr_i.rs2[4:0] + 5'd1 : 5'd0, // Port 5: 隐式 rs4
-        (issue_instr_i.op == ariane_pkg::MAC8IM) ? issue_instr_i.rs1[4:0] + 5'd1 : 5'd0, // Port 4: 隐式 rs3
-        (issue_instr_i.op == ariane_pkg::MAC8IM || issue_instr_i.op == ariane_pkg::MAC8IM) ? issue_instr_i.rd[4:0] : issue_instr_i.result[4:0], // Port 3: rd/acc
+        (issue_instr_i.op == ariane_pkg::MAC8IM) ? 5'd28 : 5'd0, // modification: if we use MAC8, the 4th and 5th port will read x28 and x29 as rs4 and rs5, otherwise they read x0
+        (issue_instr_i.op == ariane_pkg::MAC8IM) ? 5'd29 : 5'd0, 
+        (issue_instr_i.op == ariane_pkg::MAC8IM) ? issue_instr_i.rd[4:0] : issue_instr_i.result[4:0], // Port 3: rd/acc
         issue_instr_i.rs2[4:0], // Port 2: rs2
         issue_instr_i.rs1[4:0]  // Port 1: rs1
   };
@@ -653,7 +653,7 @@ module issue_read_operands
 
   //pragma translate_off
   initial begin
-    assert (CVA6Cfg.NrRgprPorts == 2 || CVA6Cfg.NrRgprPorts == 3) //&& CVA6Cfg.CvxifEn)) //modification
+    assert (CVA6Cfg.NrRgprPorts == 2 || CVA6Cfg.NrRgprPorts == 3 || CVA6Cfg.NrRgprPorts == 5) //&& CVA6Cfg.CvxifEn)) //modification
     else
       $fatal(
           1,
@@ -667,6 +667,11 @@ module issue_read_operands
       operand_b_q
   )))
   else $warning("Got unknown value in one of the operands");
+  // 在 core/issue_read_operands.sv 的报错行附近：modification to debug X value in operands
+  if ($isunknown(rdata[0]) || $isunknown(rdata[1])) begin
+      $display("DEBUG_CRITICAL: X state detected! OpCode=%h, RS1=%d, RS2=%d, Time=%t", 
+                issue_instr_i.op, issue_instr_i.rs1, issue_instr_i.rs2, $time);
+  end
 
   //pragma translate_on
 endmodule

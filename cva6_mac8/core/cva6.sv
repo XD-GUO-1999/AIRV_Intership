@@ -161,7 +161,7 @@ module cva6
   localparam bit EnableAccelerator = CVA6Cfg.RVV;  // Currently only used by V extension (Ara)
   localparam int unsigned NrWbPorts = (CVA6Cfg.CvxifEn || EnableAccelerator) ? 5 : 4;
 
-  localparam NrRgprPorts = 5;//modification
+  localparam NrRgprPorts = 5;//modification for mac8
 
   localparam config_pkg::cva6_cfg_t CVA6ExtendCfg = {
     CVA6Cfg.NrCommitPorts,

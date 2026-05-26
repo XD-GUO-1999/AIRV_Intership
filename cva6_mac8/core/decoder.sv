@@ -1195,7 +1195,7 @@ module decoder
           instruction_o.rs2[4:0] = instr.rtype.rs2; // Extract source register 2 (t2)
           instruction_o.rd[4:0]  = instr.rtype.rd;  // Extract destination register (sum)
 
-          // Check if funct3 is 000 as specified
+          // Check if funct3 is 001 as specified
           if (instr.rtype.funct3 == 3'b001) begin
             instruction_o.op = ariane_pkg::MAC8IM;  // Attach the DOT8 label we registered in ariane_pkg
           end else begin

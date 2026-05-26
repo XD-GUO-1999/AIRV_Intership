@@ -28,6 +28,10 @@ module multiplier
     input  riscv::xlen_t                     operand_a_i,
     input  riscv::xlen_t                     operand_b_i,
     input  riscv::xlen_t                     operand_c_i, //modification
+    //add rs4 and rs5 for mac8
+    input  riscv::xlen_t                     operand_d_i,
+    input  riscv::xlen_t                     operand_e_i,
+    ////
     output riscv::xlen_t                     result_o,
     output logic                             mult_valid_o,
     output logic                             mult_ready_o,
@@ -76,11 +80,57 @@ module multiplier
   //modification the logic calculate of MAC8IM
   logic [31:0] mac8im_res_d, mac8im_res_q;
 
-  assign mac8im_res_d = ($signed({1'b0, operand_a_i[7:0]})*$signed(operand_b_i[7:0])) + 
-                        ($signed({1'b0, operand_a_i[15:8]})*$signed(operand_b_i[15:8])) + 
-                        ($signed({1'b0, operand_a_i[23:16]})*$signed(operand_b_i[23:16])) + 
-                        ($signed({1'b0, operand_a_i[31:24]})*$signed(operand_b_i[31:24])) +
-                          $signed(operand_c_i); 
+//modification to debug
+  always @(posedge clk_i) begin
+    if (mult_valid_i && (operation_i == ariane_pkg::MAC8IM)) begin
+      $display("DEBUG MAC8: A=%h, B=%h, D=%h, E=%h, C(acc)=%d", 
+                operand_a_i, operand_b_i, operand_d_i, operand_e_i, $signed(operand_c_i));
+      $display("DEBUG MAC8: Calc steps: ");
+      $display("  %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d",
+               $signed(operand_a_i[7:0]), $signed(operand_b_i[7:0]),
+               $signed(operand_a_i[15:8]), $signed(operand_b_i[15:8]),
+               $signed(operand_a_i[23:16]), $signed(operand_b_i[23:16]),
+               $signed(operand_a_i[31:24]), $signed(operand_b_i[31:24]),
+               $signed(operand_d_i[7:0]), $signed(operand_e_i[7:0]),
+               $signed(operand_d_i[15:8]), $signed(operand_e_i[15:8]),
+               $signed(operand_d_i[23:16]), $signed(operand_e_i[23:16]),
+               $signed(operand_d_i[31:24]), $signed(operand_e_i[31:24]),
+               $signed(operand_c_i));
+    end
+  end
+  //modification 
+  // assign mac8im_res_d = ($signed({1'b0, operand_a_i[7:0]})*$signed(operand_b_i[7:0])) + 
+  //                       ($signed({1'b0, operand_a_i[15:8]})*$signed(operand_b_i[15:8])) + 
+  //                       ($signed({1'b0, operand_a_i[23:16]})*$signed(operand_b_i[23:16])) + 
+  //                       ($signed({1'b0, operand_a_i[31:24]})*$signed(operand_b_i[31:24])) +
+  //                       ($signed({1'b0, operand_d_i[7:0]})*$signed(operand_e_i[7:0])) + 
+  //                       ($signed({1'b0, operand_d_i[15:8]})*$signed(operand_e_i[15:8])) + 
+  //                       ($signed({1'b0, operand_d_i[23:16]})*$signed(operand_e_i[23:16])) + 
+  //                       ($signed({1'b0, operand_d_i[31:24]})*$signed(operand_e_i[31:24])) +
+  //                         $signed(operand_c_i); 
+
+  // 定义中间变量，防止溢出，且明确符号
+  logic signed [31:0] prod [7:0];
+
+  // 这一步非常关键：
+  // 1. 输入 (A/D) 是 8 位无符号，补 {1'b0, ...} 变 9 位有符号，确保是正数
+  // 2. 权重 (B/E) 是 8 位有符号，用 $signed(...) 直接转
+  // 3. 结果会自动被扩充为 32 位有符号数，不会溢出
+  assign prod[0] = $signed({1'b0, operand_a_i[7:0]})  * $signed(operand_b_i[7:0]);
+  assign prod[1] = $signed({1'b0, operand_a_i[15:8]}) * $signed(operand_b_i[15:8]);
+  assign prod[2] = $signed({1'b0, operand_a_i[23:16]})* $signed(operand_b_i[23:16]);
+  assign prod[3] = $signed({1'b0, operand_a_i[31:24]})* $signed(operand_b_i[31:24]);
+
+  assign prod[4] = $signed({1'b0, operand_d_i[7:0]})  * $signed(operand_e_i[7:0]);
+  assign prod[5] = $signed({1'b0, operand_d_i[15:8]}) * $signed(operand_e_i[15:8]);
+  assign prod[6] = $signed({1'b0, operand_d_i[23:16]})* $signed(operand_e_i[23:16]);
+  assign prod[7] = $signed({1'b0, operand_d_i[31:24]})* $signed(operand_e_i[31:24]);
+
+  // 最后累加：必须要把 operand_c_i 强转为 signed，否则它会被当成无符号数
+  assign mac8im_res_d = prod[0] + prod[1] + prod[2] + prod[3] + 
+                      prod[4] + prod[5] + prod[6] + prod[7] + 
+                      $signed(operand_c_i);
+                      
 
   // control registers
   logic sign_a, sign_b;
@@ -124,6 +174,7 @@ module multiplier
   assign operator_d = operation_i;
 
   always_comb begin : p_selmux
+    result_o = '0; //modification: default value of result
     unique case (operator_q)
       ariane_pkg::MAC8IM:    result_o = mac8im_res_q; //modification: output of mac8im
       MULH, MULHU, MULHSU: result_o = mult_result_q[riscv::XLEN*2-1:riscv::XLEN];
@@ -155,7 +206,7 @@ module multiplier
       trans_id_q    <= '0;
       operator_q    <= MUL;
       mult_result_q <= '0;
-      mac8im_res_q <= '0;
+      mac8im_res_q <= '0;//modification
     end else begin
       // Input silencing
       trans_id_q    <= trans_id_i;
@@ -163,7 +214,7 @@ module multiplier
       mult_valid_q  <= mult_valid;
       operator_q    <= operator_d;
       mult_result_q <= mult_result_d;
-      mac8im_res_q <= mac8im_res_d;
+      mac8im_res_q <= mac8im_res_d;//modification
     end
   end
 endmodule

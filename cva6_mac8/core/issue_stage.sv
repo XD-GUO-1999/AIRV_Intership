@@ -113,6 +113,15 @@ module issue_stage
   logic              [   REG_ADDR_SIZE-1:0] rs3_iro_sb;
   rs3_len_t                                 rs3_sb_iro;
   logic                                     rs3_valid_iro_sb;
+  //modification
+  logic              [   REG_ADDR_SIZE-1:0] rs4_iro_sb;
+  rs3_len_t                                 rs4_sb_iro;
+  logic                                     rs4_valid_iro_sb;
+
+  logic              [   REG_ADDR_SIZE-1:0] rs5_iro_sb;
+  rs3_len_t                                 rs5_sb_iro;
+  logic                                     rs5_valid_iro_sb;
+  /////
 
   scoreboard_entry_t                        issue_instr_sb_iro;
   logic                                     issue_instr_valid_sb_iro;
@@ -150,6 +159,15 @@ module issue_stage
       .rs3_i              (rs3_iro_sb),
       .rs3_o              (rs3_sb_iro),
       .rs3_valid_o        (rs3_valid_iro_sb),
+      //modification
+      .rs4_i              (rs4_iro_sb),
+      .rs4_o              (rs4_sb_iro),
+      .rs4_valid_o        (rs4_valid_iro_sb),
+
+      .rs5_i              (rs5_iro_sb),
+      .rs5_o              (rs5_sb_iro),
+      .rs5_valid_o        (rs5_valid_iro_sb),
+      //////
 
       .decoded_instr_i      (decoded_instr_i),
       .decoded_instr_valid_i(decoded_instr_valid_i),
@@ -193,6 +211,14 @@ module issue_stage
       .rs3_o              (rs3_iro_sb),
       .rs3_i              (rs3_sb_iro),
       .rs3_valid_i        (rs3_valid_iro_sb),
+      //modification
+      .rs4_o              (rs4_iro_sb),
+      .rs4_i              (rs4_sb_iro),
+      .rs4_valid_i        (rs4_valid_iro_sb),
+      .rs5_o              (rs5_iro_sb),
+      .rs5_i              (rs5_sb_iro),
+      .rs5_valid_i        (rs5_valid_iro_sb),
+      /////
       .rd_clobber_gpr_i   (rd_clobber_gpr_sb_iro),
       .rd_clobber_fpr_i   (rd_clobber_fpr_sb_iro),
       .alu_valid_o        (alu_valid_o),

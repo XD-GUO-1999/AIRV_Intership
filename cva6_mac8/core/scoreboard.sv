@@ -41,6 +41,16 @@ module scoreboard #(
     output rs3_len_t                                 rs3_o,
     output logic                                     rs3_valid_o,
 
+    //modification
+    input  logic         [ariane_pkg::REG_ADDR_SIZE-1:0] rs4_i,
+    output riscv::xlen_t                                 rs4_o,
+    output logic                                         rs4_valid_o,
+
+    input  logic         [ariane_pkg::REG_ADDR_SIZE-1:0] rs5_i,
+    output riscv::xlen_t                                 rs5_o,
+    output logic                                         rs5_valid_o,
+    /////
+
     // advertise instruction to commit stage, if commit_ack_i is asserted advance the commit pointer
     output ariane_pkg::scoreboard_entry_t [CVA6Cfg.NrCommitPorts-1:0] commit_instr_o,
     input  logic                          [CVA6Cfg.NrCommitPorts-1:0] commit_ack_i,
@@ -306,9 +316,10 @@ module scoreboard #(
   // Read Operands (a.k.a forwarding)
   // ----------------------------------
   // read operand interface: same logic as register file
-  logic [NR_ENTRIES+CVA6Cfg.NrWbPorts-1:0] rs1_fwd_req, rs2_fwd_req, rs3_fwd_req;
+  //modification, add rs4 and rs5
+  logic [NR_ENTRIES+CVA6Cfg.NrWbPorts-1:0] rs1_fwd_req, rs2_fwd_req, rs3_fwd_req, rs4_fwd_req, rs5_fwd_req;
   logic [NR_ENTRIES+CVA6Cfg.NrWbPorts-1:0][riscv::XLEN-1:0] rs_data;
-  logic rs1_valid, rs2_valid, rs3_valid;
+  logic rs1_valid, rs2_valid, rs3_valid, rs4_valid, rs5_valid;
 
   // WB ports have higher prio than entries
   for (genvar k = 0; unsigned'(k) < CVA6Cfg.NrWbPorts; k++) begin : gen_rs_wb
@@ -321,6 +332,11 @@ module scoreboard #(
     assign rs3_fwd_req[k] = (mem_q[trans_id_i[k]].sbe.rd == rs3_i) & wt_valid_i[k] & (~ex_i[k].valid) & (mem_q[trans_id_i[k]].is_rd_fpr_flag == (CVA6Cfg.FpPresent && ariane_pkg::is_imm_fpr(
         issue_instr_o.op
     )));
+    //modification, check the write back of rs4 and rs5
+    assign rs4_fwd_req[k] = (mem_q[trans_id_i[k]].sbe.rd == rs4_i) & wt_valid_i[k] & (~ex_i[k].valid) & (~mem_q[trans_id_i[k]].is_rd_fpr_flag);
+    assign rs5_fwd_req[k] = (mem_q[trans_id_i[k]].sbe.rd == rs5_i) & wt_valid_i[k] & (~ex_i[k].valid) & (~mem_q[trans_id_i[k]].is_rd_fpr_flag);
+
+//////////
     assign rs_data[k] = wbdata_i[k];
   end
   for (genvar k = 0; unsigned'(k) < NR_ENTRIES; k++) begin : gen_rs_entries
@@ -333,6 +349,11 @@ module scoreboard #(
     assign rs3_fwd_req[k+CVA6Cfg.NrWbPorts] = (mem_q[k].sbe.rd == rs3_i) & mem_q[k].issued & mem_q[k].sbe.valid & (mem_q[k].is_rd_fpr_flag == (CVA6Cfg.FpPresent && ariane_pkg::is_imm_fpr(
         issue_instr_o.op
     )));
+    //modification: check the data in pipeline haven't write back
+    assign rs4_fwd_req[k+CVA6Cfg.NrWbPorts] = (mem_q[k].sbe.rd == rs4_i) & mem_q[k].issued & mem_q[k].sbe.valid & (~mem_q[k].is_rd_fpr_flag);
+    assign rs5_fwd_req[k+CVA6Cfg.NrWbPorts] = (mem_q[k].sbe.rd == rs5_i) & mem_q[k].issued & mem_q[k].sbe.valid & (~mem_q[k].is_rd_fpr_flag);
+
+    ////
     assign rs_data[k+CVA6Cfg.NrWbPorts] = mem_q[k].sbe.result;
   end
 
@@ -343,10 +364,13 @@ module scoreboard #(
   assign rs2_valid_o = rs2_valid & ((|rs2_i) | (CVA6Cfg.FpPresent && ariane_pkg::is_rs2_fpr(
       issue_instr_o.op
   )));
-  assign rs3_valid_o = CVA6Cfg.NrRgprPorts == 3 ? rs3_valid & ((|rs3_i) | (CVA6Cfg.FpPresent && ariane_pkg::is_imm_fpr(
+  assign rs3_valid_o = CVA6Cfg.NrRgprPorts == 5 ? rs3_valid & ((|rs3_i) | (CVA6Cfg.FpPresent && ariane_pkg::is_imm_fpr( //modification 3 -> 5
       issue_instr_o.op
   ))) : rs3_valid;
-
+//modification: check if we are in x0 for s4 s5
+  assign rs4_valid_o = rs4_valid & (|rs4_i);
+  assign rs5_valid_o = rs5_valid & (|rs5_i);
+////
   // use fixed prio here
   // this implicitly gives higher prio to WB ports
   rr_arb_tree #(
@@ -407,6 +431,46 @@ module scoreboard #(
       .data_o (rs3),
       .idx_o  ()
   );
+
+  //modification
+    rr_arb_tree #(
+      .NumIn(NR_ENTRIES + CVA6Cfg.NrWbPorts),
+      .DataWidth(riscv::XLEN),
+      .ExtPrio(1'b1),
+      .AxiVldRdy(1'b1)
+  ) i_sel_rs4 (
+      .clk_i  (clk_i),
+      .rst_ni (rst_ni),
+      .flush_i(1'b0),
+      .rr_i   ('0),
+      .req_i  (rs4_fwd_req),
+      .gnt_o  (),
+      .data_i (rs_data),
+      .gnt_i  (1'b1),
+      .req_o  (rs4_valid),
+      .data_o (rs4),
+      .idx_o  ()
+  );
+
+    rr_arb_tree #(
+      .NumIn(NR_ENTRIES + CVA6Cfg.NrWbPorts),
+      .DataWidth(riscv::XLEN),
+      .ExtPrio(1'b1),
+      .AxiVldRdy(1'b1)
+  ) i_sel_rs5 (
+      .clk_i  (clk_i),
+      .rst_ni (rst_ni),
+      .flush_i(1'b0),
+      .rr_i   ('0),
+      .req_i  (rs5_fwd_req),
+      .gnt_o  (),
+      .data_i (rs_data),
+      .gnt_i  (1'b1),
+      .req_o  (rs5_valid),
+      .data_o (rs5),
+      .idx_o  ()
+  );
+  ///////
 
   if (CVA6Cfg.NrRgprPorts == 3) begin : gen_gp_three_port
     assign rs3_o = rs3[riscv::XLEN-1:0];
