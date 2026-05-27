@@ -108,28 +108,35 @@ module multiplier
   //                       ($signed({1'b0, operand_d_i[23:16]})*$signed(operand_e_i[23:16])) + 
   //                       ($signed({1'b0, operand_d_i[31:24]})*$signed(operand_e_i[31:24])) +
   //                         $signed(operand_c_i); 
+// 1. 声明有符号的中间变量
+logic signed [15:0] prod [0:7];
+logic signed [31:0] ext_prod [0:7];
 
-  // 定义中间变量，防止溢出，且明确符号
-  logic signed [31:0] prod [7:0];
+// 2. 剥线时：必须用 $signed() 强制打上符号烙印 (解决陷阱 1)
+assign prod[0] = $signed(operand_a_i[7:0])   * $signed(operand_b_i[7:0]);
+assign prod[1] = $signed(operand_a_i[15:8])  * $signed(operand_b_i[15:8]);
+assign prod[2] = $signed(operand_a_i[23:16]) * $signed(operand_b_i[23:16]);
+assign prod[3] = $signed(operand_a_i[31:24]) * $signed(operand_b_i[31:24]);
+assign prod[4] = $signed(operand_d_i[7:0])   * $signed(operand_e_i[7:0]);
+assign prod[5] = $signed(operand_d_i[15:8])  * $signed(operand_e_i[15:8]);
+assign prod[6] = $signed(operand_d_i[23:16]) * $signed(operand_e_i[23:16]);
+assign prod[7] = $signed(operand_d_i[31:24]) * $signed(operand_e_i[31:24]);
 
-  // 这一步非常关键：
-  // 1. 输入 (A/D) 是 8 位无符号，补 {1'b0, ...} 变 9 位有符号，确保是正数
-  // 2. 权重 (B/E) 是 8 位有符号，用 $signed(...) 直接转
-  // 3. 结果会自动被扩充为 32 位有符号数，不会溢出
-  assign prod[0] = $signed({1'b0, operand_a_i[7:0]})  * $signed(operand_b_i[7:0]);
-  assign prod[1] = $signed({1'b0, operand_a_i[15:8]}) * $signed(operand_b_i[15:8]);
-  assign prod[2] = $signed({1'b0, operand_a_i[23:16]})* $signed(operand_b_i[23:16]);
-  assign prod[3] = $signed({1'b0, operand_a_i[31:24]})* $signed(operand_b_i[31:24]);
+// 3. 符号位扩展：把 16 位安全地拉伸成 32 位 (解决陷阱 2)
+// {16{prod[0][15]}} 的意思是：把 16 位结果的最高位（符号位）复制 16 遍，拼在前面
+assign ext_prod[0] = {{16{prod[0][15]}}, prod[0]};
+assign ext_prod[1] = {{16{prod[1][15]}}, prod[1]};
+assign ext_prod[2] = {{16{prod[2][15]}}, prod[2]};
+assign ext_prod[3] = {{16{prod[3][15]}}, prod[3]};
+assign ext_prod[4] = {{16{prod[4][15]}}, prod[4]};
+assign ext_prod[5] = {{16{prod[5][15]}}, prod[5]};
+assign ext_prod[6] = {{16{prod[6][15]}}, prod[6]};
+assign ext_prod[7] = {{16{prod[7][15]}}, prod[7]};
 
-  assign prod[4] = $signed({1'b0, operand_d_i[7:0]})  * $signed(operand_e_i[7:0]);
-  assign prod[5] = $signed({1'b0, operand_d_i[15:8]}) * $signed(operand_e_i[15:8]);
-  assign prod[6] = $signed({1'b0, operand_d_i[23:16]})* $signed(operand_e_i[23:16]);
-  assign prod[7] = $signed({1'b0, operand_d_i[31:24]})* $signed(operand_e_i[31:24]);
-
-  // 最后累加：必须要把 operand_c_i 强转为 signed，否则它会被当成无符号数
-  assign mac8im_res_d = prod[0] + prod[1] + prod[2] + prod[3] + 
-                      prod[4] + prod[5] + prod[6] + prod[7] + 
-                      $signed(operand_c_i);
+// 4. 最终汇聚：全部按照 32 位有符号数进行安全相加
+assign mac8im_res_d = $signed(operand_c_i) + 
+                  ext_prod[0] + ext_prod[1] + ext_prod[2] + ext_prod[3] +
+                  ext_prod[4] + ext_prod[5] + ext_prod[6] + ext_prod[7];
                       
 
   // control registers

@@ -115,11 +115,11 @@ module issue_stage
   logic                                     rs3_valid_iro_sb;
   //modification
   logic              [   REG_ADDR_SIZE-1:0] rs4_iro_sb;
-  rs3_len_t                                 rs4_sb_iro;
+  riscv::xlen_t                             rs4_sb_iro;
   logic                                     rs4_valid_iro_sb;
 
   logic              [   REG_ADDR_SIZE-1:0] rs5_iro_sb;
-  rs3_len_t                                 rs5_sb_iro;
+  riscv::xlen_t                             rs5_sb_iro;
   logic                                     rs5_valid_iro_sb;
   /////
 

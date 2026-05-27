@@ -448,7 +448,7 @@ module scoreboard #(
       .data_i (rs_data),
       .gnt_i  (1'b1),
       .req_o  (rs4_valid),
-      .data_o (rs4),
+      .data_o (rs4_o),
       .idx_o  ()
   );
 
@@ -467,7 +467,7 @@ module scoreboard #(
       .data_i (rs_data),
       .gnt_i  (1'b1),
       .req_o  (rs5_valid),
-      .data_o (rs5),
+      .data_o (rs5_o),
       .idx_o  ()
   );
   ///////

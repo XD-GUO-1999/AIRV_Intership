@@ -52,8 +52,8 @@ module mult
       $display("DEBUG_CHECK: OpA=%h, OpB=%h, RS3=%h, RS4=%h, Imm=%h", 
                fu_data_i.operand_a, 
                fu_data_i.operand_b, 
-               fu_data_i.operand_rs3, 
-               fu_data_i.operand_rs4, 
+               fu_data_i.operand_d, 
+               fu_data_i.operand_e, 
                fu_data_i.imm);
     end
   end
@@ -68,8 +68,8 @@ module mult
       .operand_b_i    (fu_data_i.operand_b),
       .operand_c_i    (fu_data_i.imm),//modification use imm to store 3rd data
       //modification: add rs3 and rs4
-      .operand_d_i    (fu_data_i.operand_rs3),
-      .operand_e_i    (fu_data_i.operand_rs4),
+      .operand_d_i    (fu_data_i.operand_d),
+      .operand_e_i    (fu_data_i.operand_e),
       ////
       .result_o       (mul_result),
       .mult_valid_i   (mul_valid_op),

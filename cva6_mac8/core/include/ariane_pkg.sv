@@ -576,9 +576,9 @@ package ariane_pkg;
     riscv::xlen_t             operand_a;
     riscv::xlen_t             operand_b;
     riscv::xlen_t             imm;
-    //mofification
-    riscv::xlen_t             operand_rs3;
-    riscv::xlen_t             operand_rs4;
+    //modification
+    riscv::xlen_t             operand_d;
+    riscv::xlen_t             operand_e;
     logic [TRANS_ID_BITS-1:0] trans_id;
   } fu_data_t;
 

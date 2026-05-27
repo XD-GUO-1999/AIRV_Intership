@@ -28,9 +28,9 @@ static inline int32_t mac8i_test_with_lw(const uint32_t *pa_packed, const uint32
         "nop\n\t"
 
         // 调用你的 MAC 算子
-        "mac8im %[acc], t1, t2\n\t"
+        "mac8im %[sum], t1, t2\n\t"
 
-        : [acc] "+r" (sum)
+        : [sum] "+r" (sum)
         : [pa] "r" (pa_packed),
           [pb] "r" (pb_packed)
         : "t1", "t2", "t3", "t4", "cc", "memory" 
@@ -55,7 +55,7 @@ int main(void)
     weight_packed[0] = 0xFE02FF01; 
     weight_packed[1] = 0xFC04FD03; 
 
-    int32_t init = 0;
+    int32_t init = 100;
 
     // 依然用你原来的 uint8_t 指针去跑一遍纯 C 的参考模型
     int32_t ref = reference_mac8((const uint8_t *)input_packed, (const int8_t *)weight_packed, init);

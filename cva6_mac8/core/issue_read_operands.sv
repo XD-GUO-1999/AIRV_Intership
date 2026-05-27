@@ -42,10 +42,10 @@ module issue_read_operands
     input logic rs3_valid_i,
     //modification
     output logic [REG_ADDR_SIZE-1:0] rs4_o,
-    input rs3_len_t rs4_i,
+    input riscv::xlen_t rs4_i,
     input logic rs4_valid_i,
     output logic [REG_ADDR_SIZE-1:0] rs5_o,
-    input rs3_len_t rs5_i,
+    input riscv::xlen_t rs5_i,
     input logic rs5_valid_i,
     //
     // get clobber input
@@ -134,8 +134,8 @@ module issue_read_operands
   assign fu_data_o.operand_a = operand_a_q;
   assign fu_data_o.operand_b = operand_b_q;
   //modification
-  assign fu_data_o.operand_rs3 = operand_d_q;
-  assign fu_data_o.operand_rs4 = operand_e_q;
+  assign fu_data_o.operand_d = operand_d_q;
+  assign fu_data_o.operand_e = operand_e_q;
   //
   assign fu_data_o.fu        = fu_q;
   assign fu_data_o.operation = operator_q;
@@ -252,20 +252,20 @@ module issue_read_operands
       end
     end
         //modification: 
-    // if (issue_instr_i.op == ariane_pkg::MAC8IM)begin
-    //   if(rd_clobber_gpr_i[rs4_o] != NONE)begin
-    //       if(rs4_valid_i) forward_rs4 = 1'b1;
-    //       //else stall = 1'b1;
-    //   end
-    //   if(rd_clobber_gpr_i[rs5_o] != NONE)begin
-    //       if(rs5_valid_i) forward_rs5 = 1'b1;
-    //       //else stall = 1'b1;
-    //   end
-    // end
+    if (issue_instr_i.op == ariane_pkg::MAC8IM)begin
+      if(rd_clobber_gpr_i[rs4_o] != NONE)begin
+          if(rs4_valid_i) forward_rs4 = 1'b1;
+          else stall = 1'b1;
+      end
+      if(rd_clobber_gpr_i[rs5_o] != NONE)begin
+          if(rs5_valid_i) forward_rs5 = 1'b1;
+          else stall = 1'b1;
+      end
+    end
   end
 
   // third operand from fp regfile or gp regfile if NR_RGPR_PORTS == 3
-  if (CVA6Cfg.NrRgprPorts == 3) begin : gen_gp_rs3
+  if (CVA6Cfg.NrRgprPorts == 5) begin : gen_gp_rs3
       assign imm_forward_rs3 = rs3_i;
   end else begin : gen_fp_rs3
       assign imm_forward_rs3 = {{riscv::XLEN-CVA6Cfg.FLen{1'b0}}, rs3_i};
@@ -284,7 +284,7 @@ module issue_read_operands
     if (CVA6Cfg.NrRgprPorts == 5) begin//modification 3 -> 5
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} :
-          (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC8IM) ? operand_c_regfile : issue_instr_i.result; //modification : ajout MAC4
+          (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC8IM) ? operand_c_regfile : issue_instr_i.result; //modification : ajout MAC8IM
     end else begin
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} : issue_instr_i.result;
@@ -597,7 +597,7 @@ module issue_read_operands
     end
   endgenerate
 
-  if (CVA6Cfg.NrRgprPorts == 3) begin : gen_operand_c
+  if (CVA6Cfg.NrRgprPorts == 5) begin : gen_operand_c
     assign operand_c_fpr = {{riscv::XLEN-CVA6Cfg.FLen{1'b0}}, fprdata[2]};
     assign operand_c_gpr = rdata[2];
   end else begin
@@ -610,7 +610,7 @@ module issue_read_operands
   assign operand_b_regfile = (CVA6Cfg.FpPresent && is_rs2_fpr(
       issue_instr_i.op
   )) ? {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, fprdata[1]} : rdata[1];
-  assign operand_c_regfile = (CVA6Cfg.NrRgprPorts >= 3) ? ((CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ? operand_c_fpr : operand_c_gpr) : operand_c_fpr;
+  assign operand_c_regfile = (CVA6Cfg.NrRgprPorts == 5) ? ((CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ? operand_c_fpr : operand_c_gpr) : operand_c_fpr;
 //modification
   assign operand_d_regfile = (CVA6Cfg.NrRgprPorts == 5) ? rdata[3] : 0;
   assign operand_e_regfile = (CVA6Cfg.NrRgprPorts == 5) ? rdata[4] : 0;
@@ -667,12 +667,6 @@ module issue_read_operands
       operand_b_q
   )))
   else $warning("Got unknown value in one of the operands");
-  // 在 core/issue_read_operands.sv 的报错行附近：modification to debug X value in operands
-  if ($isunknown(rdata[0]) || $isunknown(rdata[1])) begin
-      $display("DEBUG_CRITICAL: X state detected! OpCode=%h, RS1=%d, RS2=%d, Time=%t", 
-                issue_instr_i.op, issue_instr_i.rs1, issue_instr_i.rs2, $time);
-  end
-
   //pragma translate_on
 endmodule
 
