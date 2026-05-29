@@ -94,7 +94,7 @@ module issue_read_operands
   logic stall;
   logic fu_busy;  // functional unit is busy
   riscv::xlen_t operand_a_regfile, operand_b_regfile;  // operands coming from regfile
-  //modification
+  //modification :
   riscv::xlen_t operand_d_regfile, operand_e_regfile;
   //
   rs3_len_t operand_c_regfile, operand_c_fpr, operand_c_gpr;  // third operand from fp regfile or gp regfile if NR_RGPR_PORTS == 3
@@ -119,7 +119,7 @@ module issue_read_operands
 
   // forwarding signals
   logic forward_rs1, forward_rs2, forward_rs3;
-  //modification
+  //modification : 
   logic forward_rs4, forward_rs5;
 
   // original instruction stored in tval
@@ -133,7 +133,7 @@ module issue_read_operands
 
   assign fu_data_o.operand_a = operand_a_q;
   assign fu_data_o.operand_b = operand_b_q;
-  //modification
+  //modification : con
   assign fu_data_o.operand_d = operand_d_q;
   assign fu_data_o.operand_e = operand_e_q;
   //
@@ -276,7 +276,7 @@ module issue_read_operands
     // default is regfiles (gpr or fpr)
     operand_a_n = operand_a_regfile;
     operand_b_n = operand_b_regfile;
-    //modification
+    //modification 
     operand_d_n = operand_d_regfile;
     operand_e_n = operand_e_regfile;
     // immediates are the third operands in the store case
@@ -500,7 +500,7 @@ module issue_read_operands
         issue_instr_i.rs1[4:0]  // Port 1: rs1
   };
   end else if (CVA6Cfg.NrRgprPorts == 3) begin : gen_rs3
-    assign raddr_pack = (issue_instr_i.op == ariane_pkg::MAC8IM) ? //modification if we use MAC4, the 3rd port should read rd to load rs3
+    assign raddr_pack = (issue_instr_i.op == ariane_pkg::MAC4) ? //modification if we use MAC4, the 3rd port should read rd to load rs3
                         {issue_instr_i.rd[4:0], issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]} :
                         {issue_instr_i.result[4:0], issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]};
   end else begin : gen_no_rs3
@@ -611,8 +611,8 @@ module issue_read_operands
       issue_instr_i.op
   )) ? {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, fprdata[1]} : rdata[1];
   assign operand_c_regfile = (CVA6Cfg.NrRgprPorts == 5) ? ((CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ? operand_c_fpr : operand_c_gpr) : operand_c_fpr;
-//modification
-  assign operand_d_regfile = (CVA6Cfg.NrRgprPorts == 5) ? rdata[3] : 0;
+//modification :fpr or gpr, here we use gpr as the 3rd operand for mac8im, so we need to check if it is mac8im or not
+  assign operand_d_regfile = (CVA6Cfg.NrRgprPorts == 5) ? rdata[3] : 0; //to connect rdata[3] for mac8im, which is rs4, to operand_d_regfile
   assign operand_e_regfile = (CVA6Cfg.NrRgprPorts == 5) ? rdata[4] : 0;
 
 // synthesis translate_off modification to debug mac8im instruction, remove it after verification
@@ -656,7 +656,7 @@ module issue_read_operands
     end else begin
       operand_a_q           <= operand_a_n;
       operand_b_q           <= operand_b_n;
-      //modification
+      //modification : send
       operand_d_q           <= operand_d_n;
       operand_e_q           <= operand_e_n;
 

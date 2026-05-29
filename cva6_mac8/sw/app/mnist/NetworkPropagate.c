@@ -71,7 +71,7 @@ static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
     int32_t sum = *weightedSum;
     int iter = 0;
 
-    for (; iter <= nb_iterations - 4; iter += 4) {
+    for (; iter <= nb_iterations - 8; iter += 8) {
         const UDATA_T *p_in = inputs + iter;
         const UDATA_T *p_wt = weights + iter;
 
@@ -80,19 +80,26 @@ static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
         
         if(((addr_in & 0x3) == 0) && ((addr_wt & 0x3) == 0)){
             asm volatile(
-                "lw t1, 0(%[p_in]) \n\t"
-                "lw t2, 0(%[p_wt]) \n\t"
+                "lw t3, 0(%[p_in]) \n\t"
+                "lw t4, 0(%[p_wt]) \n\t"
+                "lw t1, 24(%[p_in]) \n\t"
+                "lw t2, 4(%[p_wt]) \n\t"
+
                 "mac8im %[sum], t1, t2 \n\t"
                 : [sum] "+r" (sum)
                 : [p_in] "r" (p_in), 
                 [p_wt] "r" (p_wt)
-                : "t1", "t2", "memory"
+                : "t1", "t2", "t3", "t4", "cc", "memory"
             );
         }else{
             sum += inputs[iter + 0] * weights[iter + 0];
             sum += inputs[iter + 1] * weights[iter + 1];
             sum += inputs[iter + 2] * weights[iter + 2];
             sum += inputs[iter + 3] * weights[iter + 3];
+            sum += inputs[iter + 24] * weights[iter + 4];
+            sum += inputs[iter + 25] * weights[iter + 5];
+            sum += inputs[iter + 26] * weights[iter + 6];
+            sum += inputs[iter + 27] * weights[iter + 7];
         }
     }
 
@@ -205,7 +212,7 @@ static void convcellPropagate1(
 
                 SUM_T weightedSum = biasses[output]; // add biasses of kernel firstly
 
-                for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) { //in the kernel, start by line
+                for (int sy = 0; sy <= KERNEL_HEIGHT - 2; sy += 2) { //in the kernel, start by line
                     if ((PADDING_Y != 0
                             || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
                         && sy >= syMax - syMin)
@@ -248,11 +255,11 @@ static void convcellPropagate1(
                                 || sxMax - sxMin == KERNEL_WIDTH)))                  // or there is padding but the kernel is not cut by the padding (the kernel is whole)
                                                                                      // to make sure the kernel in x is valid, we can use fonction direcetly
                     {
-                        macsOnRange(
+                        macsOnRange_no_alined(
                             inputs + iOffset, 
                             weights + wOffset, 
                             &weightedSum,
-                            KERNEL_WIDTH * NB_CHANNELS);
+                            KERNEL_WIDTH * NB_CHANNELS * 2); //macs on a whole line of kernel, which is 2 times of NB_CHANNELS, because we unroll 2 times in y direction
                     }
                     else {
                         for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
