@@ -81,63 +81,33 @@ module multiplier
   logic [31:0] mac8im_res_d, mac8im_res_q;
 
 //modification to debug
-  always @(posedge clk_i) begin
-    if (mult_valid_i && (operation_i == ariane_pkg::MAC8IM)) begin
-      $display("DEBUG MAC8: A=%h, B=%h, D=%h, E=%h, C(acc)=%d", 
-                operand_a_i, operand_b_i, operand_d_i, operand_e_i, $signed(operand_c_i));
-      $display("DEBUG MAC8: Calc steps: ");
-      $display("  %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d",
-               $signed(operand_a_i[7:0]), $signed(operand_b_i[7:0]),
-               $signed(operand_a_i[15:8]), $signed(operand_b_i[15:8]),
-               $signed(operand_a_i[23:16]), $signed(operand_b_i[23:16]),
-               $signed(operand_a_i[31:24]), $signed(operand_b_i[31:24]),
-               $signed(operand_d_i[7:0]), $signed(operand_e_i[7:0]),
-               $signed(operand_d_i[15:8]), $signed(operand_e_i[15:8]),
-               $signed(operand_d_i[23:16]), $signed(operand_e_i[23:16]),
-               $signed(operand_d_i[31:24]), $signed(operand_e_i[31:24]),
-               $signed(operand_c_i));
-    end
-  end
+  // always @(posedge clk_i) begin
+  //   if (mult_valid_i && (operation_i == ariane_pkg::MAC8IM)) begin
+  //     $display("DEBUG MAC8: A=%h, B=%h, D=%h, E=%h, C(acc)=%d", 
+  //               operand_a_i, operand_b_i, operand_d_i, operand_e_i, $signed(operand_c_i));
+  //     $display("DEBUG MAC8: Calc steps: ");
+  //     $display("  %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d*%d + %d",
+  //              $signed(operand_a_i[7:0]), $signed(operand_b_i[7:0]),
+  //              $signed(operand_a_i[15:8]), $signed(operand_b_i[15:8]),
+  //              $signed(operand_a_i[23:16]), $signed(operand_b_i[23:16]),
+  //              $signed(operand_a_i[31:24]), $signed(operand_b_i[31:24]),
+  //              $signed(operand_d_i[7:0]), $signed(operand_e_i[7:0]),
+  //              $signed(operand_d_i[15:8]), $signed(operand_e_i[15:8]),
+  //              $signed(operand_d_i[23:16]), $signed(operand_e_i[23:16]),
+  //              $signed(operand_d_i[31:24]), $signed(operand_e_i[31:24]),
+  //              $signed(operand_c_i));
+  //   end
+  // end
   //modification 
-  // assign mac8im_res_d = ($signed({1'b0, operand_a_i[7:0]})*$signed(operand_b_i[7:0])) + 
-  //                       ($signed({1'b0, operand_a_i[15:8]})*$signed(operand_b_i[15:8])) + 
-  //                       ($signed({1'b0, operand_a_i[23:16]})*$signed(operand_b_i[23:16])) + 
-  //                       ($signed({1'b0, operand_a_i[31:24]})*$signed(operand_b_i[31:24])) +
-  //                       ($signed({1'b0, operand_d_i[7:0]})*$signed(operand_e_i[7:0])) + 
-  //                       ($signed({1'b0, operand_d_i[15:8]})*$signed(operand_e_i[15:8])) + 
-  //                       ($signed({1'b0, operand_d_i[23:16]})*$signed(operand_e_i[23:16])) + 
-  //                       ($signed({1'b0, operand_d_i[31:24]})*$signed(operand_e_i[31:24])) +
-  //                         $signed(operand_c_i); 
-// 1. 声明有符号的中间变量
-logic signed [15:0] prod [0:7];
-logic signed [31:0] ext_prod [0:7];
-
-// 2. 剥线时：必须用 $signed() 强制打上符号烙印 (解决陷阱 1)
-assign prod[0] = $signed(operand_a_i[7:0])   * $signed(operand_b_i[7:0]);
-assign prod[1] = $signed(operand_a_i[15:8])  * $signed(operand_b_i[15:8]);
-assign prod[2] = $signed(operand_a_i[23:16]) * $signed(operand_b_i[23:16]);
-assign prod[3] = $signed(operand_a_i[31:24]) * $signed(operand_b_i[31:24]);
-assign prod[4] = $signed(operand_d_i[7:0])   * $signed(operand_e_i[7:0]);
-assign prod[5] = $signed(operand_d_i[15:8])  * $signed(operand_e_i[15:8]);
-assign prod[6] = $signed(operand_d_i[23:16]) * $signed(operand_e_i[23:16]);
-assign prod[7] = $signed(operand_d_i[31:24]) * $signed(operand_e_i[31:24]);
-
-// 3. 符号位扩展：把 16 位安全地拉伸成 32 位 (解决陷阱 2)
-// {16{prod[0][15]}} 的意思是：把 16 位结果的最高位（符号位）复制 16 遍，拼在前面
-assign ext_prod[0] = {{16{prod[0][15]}}, prod[0]};
-assign ext_prod[1] = {{16{prod[1][15]}}, prod[1]};
-assign ext_prod[2] = {{16{prod[2][15]}}, prod[2]};
-assign ext_prod[3] = {{16{prod[3][15]}}, prod[3]};
-assign ext_prod[4] = {{16{prod[4][15]}}, prod[4]};
-assign ext_prod[5] = {{16{prod[5][15]}}, prod[5]};
-assign ext_prod[6] = {{16{prod[6][15]}}, prod[6]};
-assign ext_prod[7] = {{16{prod[7][15]}}, prod[7]};
-
-// 4. 最终汇聚：全部按照 32 位有符号数进行安全相加
-assign mac8im_res_d = $signed(operand_c_i) + 
-                  ext_prod[0] + ext_prod[1] + ext_prod[2] + ext_prod[3] +
-                  ext_prod[4] + ext_prod[5] + ext_prod[6] + ext_prod[7];
-                      
+  assign mac8im_res_d = ($signed({1'b0, operand_a_i[7:0]})*$signed(operand_b_i[7:0])) + 
+                        ($signed({1'b0, operand_a_i[15:8]})*$signed(operand_b_i[15:8])) + 
+                        ($signed({1'b0, operand_a_i[23:16]})*$signed(operand_b_i[23:16])) + 
+                        ($signed({1'b0, operand_a_i[31:24]})*$signed(operand_b_i[31:24])) +
+                        ($signed({1'b0, operand_d_i[7:0]})*$signed(operand_e_i[7:0])) + 
+                        ($signed({1'b0, operand_d_i[15:8]})*$signed(operand_e_i[15:8])) + 
+                        ($signed({1'b0, operand_d_i[23:16]})*$signed(operand_e_i[23:16])) + 
+                        ($signed({1'b0, operand_d_i[31:24]})*$signed(operand_e_i[31:24])) +
+                          $signed(operand_c_i); 
 
   // control registers
   logic sign_a, sign_b;

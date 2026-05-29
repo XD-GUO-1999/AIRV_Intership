@@ -47,16 +47,16 @@ module mult
   // ---------------------
 
   //modification to debug
-  always @(posedge clk_i) begin
-    if (mult_valid_i) begin
-      $display("DEBUG_CHECK: OpA=%h, OpB=%h, RS3=%h, RS4=%h, Imm=%h", 
-               fu_data_i.operand_a, 
-               fu_data_i.operand_b, 
-               fu_data_i.operand_d, 
-               fu_data_i.operand_e, 
-               fu_data_i.imm);
-    end
-  end
+  // always @(posedge clk_i) begin
+  //   if (mult_valid_i) begin
+  //     $display("DEBUG_CHECK: OpA=%h, OpB=%h, OpD=%h, OpE=%h, Imm=%h", 
+  //              fu_data_i.operand_a, 
+  //              fu_data_i.operand_b, 
+  //              fu_data_i.operand_d, 
+  //              fu_data_i.operand_e, 
+  //              fu_data_i.imm);
+  //   end
+  // end
   multiplier #(
       .CVA6Cfg(CVA6Cfg)
   ) i_multiplier (

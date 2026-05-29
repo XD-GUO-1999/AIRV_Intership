@@ -264,8 +264,8 @@ module issue_read_operands
     end
   end
 
-  // third operand from fp regfile or gp regfile if NR_RGPR_PORTS == 3
-  if (CVA6Cfg.NrRgprPorts == 5) begin : gen_gp_rs3
+  // third operand from fp regfile or gp regfile if NR_RGPR_PORTS == 5
+  if (CVA6Cfg.NrRgprPorts == 5) begin : gen_gp_rs3 //modification 3 -> 5
       assign imm_forward_rs3 = rs3_i;
   end else begin : gen_fp_rs3
       assign imm_forward_rs3 = {{riscv::XLEN-CVA6Cfg.FLen{1'b0}}, rs3_i};
@@ -491,16 +491,16 @@ module issue_read_operands
   logic [CVA6Cfg.NrCommitPorts-1:0][riscv::XLEN-1:0] wdata_pack;
   logic [CVA6Cfg.NrCommitPorts-1:0]                  we_pack;
 
-  if (CVA6Cfg.NrRgprPorts == 5) begin : gen_rs5 //modification
+  if (CVA6Cfg.NrRgprPorts == 5) begin : gen_rs3 //modification
   assign raddr_pack = {
-        (issue_instr_i.op == ariane_pkg::MAC8IM) ? 5'd28 : 5'd0, // modification: if we use MAC8, the 4th and 5th port will read x28 and x29 as rs4 and rs5, otherwise they read x0
-        (issue_instr_i.op == ariane_pkg::MAC8IM) ? 5'd29 : 5'd0, 
+        (issue_instr_i.op == ariane_pkg::MAC8IM) ? 5'd29 : 5'd0, // modification: if we use MAC8, the 4th and 5th port will read x28 and x29 as rs4 and rs5, otherwise they read x0
+        (issue_instr_i.op == ariane_pkg::MAC8IM) ? 5'd28 : 5'd0, // important; here we apply as rs5 rs4 rs3 rs2 rs1, the order is important
         (issue_instr_i.op == ariane_pkg::MAC8IM) ? issue_instr_i.rd[4:0] : issue_instr_i.result[4:0], // Port 3: rd/acc
         issue_instr_i.rs2[4:0], // Port 2: rs2
         issue_instr_i.rs1[4:0]  // Port 1: rs1
   };
   end else if (CVA6Cfg.NrRgprPorts == 3) begin : gen_rs3
-    assign raddr_pack = {issue_instr_i.op == ariane_pkg::MAC8IM} ? //modification if we use MAC4, the 3rd port should read rd to load rs3
+    assign raddr_pack = (issue_instr_i.op == ariane_pkg::MAC8IM) ? //modification if we use MAC4, the 3rd port should read rd to load rs3
                         {issue_instr_i.rd[4:0], issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]} :
                         {issue_instr_i.result[4:0], issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]};
   end else begin : gen_no_rs3
@@ -615,6 +615,25 @@ module issue_read_operands
   assign operand_d_regfile = (CVA6Cfg.NrRgprPorts == 5) ? rdata[3] : 0;
   assign operand_e_regfile = (CVA6Cfg.NrRgprPorts == 5) ? rdata[4] : 0;
 
+// synthesis translate_off modification to debug mac8im instruction, remove it after verification
+// always_ff @(posedge clk_i) begin
+//   if (rst_ni && issue_instr_valid_i && issue_instr_i.op == ariane_pkg::MAC8IM) begin
+//     $display("[MAC8IM][%0t] rd=%0d rs1=%0d rs2=%0d | raddr_pack[2]=%0d rdata[2]=0x%08h operand_c_regfile=0x%08h imm_n=0x%08h imm_q=0x%08h issue_ack=%0b stall=%0b bits(rs3_i)=%0d bits(operand_c_regfile)=%0d bits(operand_c_gpr)=%0d",
+//              $time,
+//              issue_instr_i.rd,
+//              issue_instr_i.rs1,
+//              issue_instr_i.rs2,
+//              raddr_pack[2],
+//              rdata[2],
+//              operand_c_regfile,
+//              imm_n,
+//              imm_q,
+//              issue_ack_o,
+//              stall,
+//              $bits(rs3_i), $bits(operand_c_regfile), $bits(operand_c_gpr));
+//   end
+// end
+// ////////////////
 
   // ----------------------
   // Registers (ID <-> EX)

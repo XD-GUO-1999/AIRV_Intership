@@ -97,7 +97,7 @@ module issue_stage
   // ---------------------------------------------------
   // Scoreboard (SB) <-> Issue and Read Operands (IRO)
   // ---------------------------------------------------
-  typedef logic [(CVA6Cfg.NrRgprPorts == 3 ? riscv::XLEN : CVA6Cfg.FLen)-1:0] rs3_len_t;
+  typedef logic [(CVA6Cfg.NrRgprPorts == 5 ? riscv::XLEN : CVA6Cfg.FLen)-1:0] rs3_len_t; //modifcation 3 -> 5, it is important, if not, the size of rs3 will be 1
 
   fu_t               [2**REG_ADDR_SIZE-1:0] rd_clobber_gpr_sb_iro;
   fu_t               [2**REG_ADDR_SIZE-1:0] rd_clobber_fpr_sb_iro;

@@ -23,9 +23,9 @@ static inline int32_t mac8i_test_with_lw(const uint32_t *pa_packed, const uint32
         "lw t1, 4(%[pa])\n\t"      // 显式 t1 = input[4..7]
         "lw t2, 4(%[pb])\n\t"      // 显式 t2 = weight[4..7]
 
-        "nop\n\t"
-        "nop\n\t"
-        "nop\n\t"
+        // "nop\n\t"
+        // "nop\n\t"
+        // "nop\n\t"
 
         // 调用你的 MAC 算子
         "mac8im %[sum], t1, t2\n\t"

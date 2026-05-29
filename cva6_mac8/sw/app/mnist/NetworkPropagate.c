@@ -39,21 +39,19 @@ static void macsOnRange_with_mac4(const UDATA_T* __restrict inputs,
     for (; iter <= nb_iterations - 8; iter += 8) {
         const UDATA_T *p_in = inputs + iter;
         const UDATA_T *p_wt = weights + iter;
-        const UDATA_T *p_in_low = inputs + iter - 4;
-        const UDATA_T *p_wt_low = weights + iter - 4;
+        // const UDATA_T *p_in_low = inputs + iter - 4;
+        // const UDATA_T *p_wt_low = weights + iter - 4;
         
         asm volatile(
-        "lw t1, 0(%[p_in]) \n\t"
-        "lw t2, 0(%[p_wt]) \n\t"
-        "lw t3, 0(%[p_in_low]) \n\t"
-        "lw t4, 0(%[p_wt_low]) \n\t"
+        "lw t3, 0(%[p_in]) \n\t"
+        "lw t4, 0(%[p_wt]) \n\t"
+        "lw t1, 4(%[p_in]) \n\t"
+        "lw t2, 4(%[p_wt]) \n\t"
         "mac8im %[sum], t1, t2 \n\t"
         : [sum] "+r" (sum)
         : [p_in] "r" (p_in), 
-        [p_wt] "r" (p_wt),
-        [p_in_low] "r" (p_in_low),
-        [p_wt_low] "r" (p_wt_low)
-        : "t1", "t2", "t3", "t4"
+        [p_wt] "r" (p_wt)
+        : "t1", "t2", "t3", "t4", "cc", "memory"
         );
     }
 
@@ -84,7 +82,7 @@ static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
             asm volatile(
                 "lw t1, 0(%[p_in]) \n\t"
                 "lw t2, 0(%[p_wt]) \n\t"
-                "mac4 %[sum], t1, t2 \n\t"
+                "mac8im %[sum], t1, t2 \n\t"
                 : [sum] "+r" (sum)
                 : [p_in] "r" (p_in), 
                 [p_wt] "r" (p_wt)
@@ -250,7 +248,7 @@ static void convcellPropagate1(
                                 || sxMax - sxMin == KERNEL_WIDTH)))                  // or there is padding but the kernel is not cut by the padding (the kernel is whole)
                                                                                      // to make sure the kernel in x is valid, we can use fonction direcetly
                     {
-                        macsOnRange_no_alined(
+                        macsOnRange(
                             inputs + iOffset, 
                             weights + wOffset, 
                             &weightedSum,
@@ -421,7 +419,7 @@ static void convcellPropagate2(
                                             - INPUT_MEM_CONT_SIZE;
                             }
 
-                            macsOnRange_with_mac4(
+                            macsOnRange(
                                 // same input line so no wrapping can occur
                                 inputs + iOffsetInRange, 
                                 weights + wOffset + sx * NB_CHANNELS, 
@@ -780,7 +778,12 @@ void propagate(const UDATA_T* inputs, Target_T* outputs, UDATA_T* maxPropagate_v
     saveOutputs(FC2_NB_OUTPUTS, FC2_OUTPUTS_HEIGHT, FC2_OUTPUTS_WIDTH, FC2_MEM_CONT_OFFSET, FC2_MEM_CONT_SIZE, FC2_MEM_WRAP_OFFSET, FC2_MEM_WRAP_SIZE, FC2_MEM_STRIDE, fc2_output , fc2_stream, Network::Format::CHW);
     fclose(fc2_stream);
 #endif
-
+//modifcation debug
+    printf("fc2_output = ");
+    for (int i = 0; i < 10; i++) {
+        printf("%d ", fc2_output[i]);
+    }
+    printf("\n");
     maxPropagate1(fc2_output, outputs, maxPropagate_val, FC2_NB_OUTPUTS, FC2_OUTPUTS_HEIGHT, FC2_OUTPUTS_WIDTH, FC2_MEM_CONT_OFFSET, FC2_MEM_CONT_SIZE, FC2_MEM_WRAP_OFFSET, FC2_MEM_WRAP_SIZE, FC2_MEM_STRIDE);
 
 #ifdef SAVE_OUTPUTS
