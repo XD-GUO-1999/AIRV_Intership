@@ -195,8 +195,8 @@ module issue_read_operands
     if (issue_instr_i.op == ariane_pkg::MAC8EX) begin
       rs1_o = issue_instr_i.rs1;  // Port 1: rs1
       rs2_o = issue_instr_i.rs2;  // Port 2: rs2
-      rs4_o = issue_instr_i.result[4:0]; //modification: use x28 as the 4th register for mac8ex
-      rs5_o = issue_instr_i.result[9:5];  //modification: use x29 as the 5th register for mac8ex
+      rs4_o = issue_instr_i.result[4:0]; //modification: 
+      rs5_o = issue_instr_i.result[9:5];  //modification: 
     end else begin
       rs4_o = '0;
       rs5_o = '0;
