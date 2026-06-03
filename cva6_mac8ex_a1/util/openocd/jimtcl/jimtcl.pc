@@ -1,0 +1,13 @@
+prefix=/home/imtuser/AIRV/cva6-softcore-contest/util/openocd/build
+exec_prefix=/cva6-softcore-contest/util/openocd/build
+libdir=/cva6-softcore-contest/util/openocd/build/lib
+includedir=/home/imtuser/AIRV/cva6-softcore-contest/util/openocd/build/include
+
+Name: jimtcl
+URL: http://jim.tcl.tk/
+Description: The Jim Interpreter - A small-footprint implementation of the Tcl programming language.
+Version: 0.79
+Requires: 
+Libs: -L${libdir} -ljim
+Libs.private: 
+Cflags: -I${includedir} 
