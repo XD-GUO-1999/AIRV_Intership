@@ -3,7 +3,7 @@
 
 static inline int32_t mac4(uint32_t a, uint32_t b)
 {
-    int32_t r = 0;
+    int32_t r = 100;
     asm volatile(
         "mac4 %[r], %[a], %[b]\n\t"
         : [r] "+r" (r)

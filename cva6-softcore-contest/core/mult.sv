@@ -44,7 +44,8 @@ module mult
 
   // ---------------------
   // Multiplication
-  // ---------------------
+  // --------------------
+
   multiplier #(
       .CVA6Cfg(CVA6Cfg)
   ) i_multiplier (

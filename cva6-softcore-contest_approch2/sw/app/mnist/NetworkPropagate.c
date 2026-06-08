@@ -100,6 +100,52 @@ static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
      *weightedSum = sum;
 }
 
+static void macsOnRange_no_alined_for_fc2(const UDATA_T* __restrict inputs,
+                        const WDATA_T* __restrict weights,
+                        SUM_T* __restrict weightedSum,
+                        int nb_iterations)
+{
+    int32_t sum = *weightedSum;
+    int iter = 0;
+
+    uintptr_t addr_wt = (uintptr_t)weights;
+    if((addr_wt & 0x3) == 0){
+        for (; iter <= nb_iterations - 4; iter += 4) {
+            const UDATA_T *p_in = inputs + iter;
+            const UDATA_T *p_wt = weights + iter;
+
+            asm volatile(
+                "lw t1, 0(%[p_in]) \n\t"
+                "lw t2, 0(%[p_wt]) \n\t"
+                "mac4 %[sum], t1, t2 \n\t"
+                : [sum] "+r" (sum)
+                : [p_in] "r" (p_in), 
+                [p_wt] "r" (p_wt)
+                : "t1", "t2", "memory"
+            );
+        }
+
+        for (; iter < nb_iterations; ++iter)
+            {
+                sum += inputs[iter] * weights[iter];
+            }
+    }else{
+        for (; iter <= nb_iterations - 4; iter += 4) {
+            sum += inputs[iter + 0] * weights[iter + 0];
+            sum += inputs[iter + 1] * weights[iter + 1];
+            sum += inputs[iter + 2] * weights[iter + 2];
+            sum += inputs[iter + 3] * weights[iter + 3];
+        }
+
+        for (; iter < nb_iterations; ++iter) {
+            sum += inputs[iter] * weights[iter];
+        }
+    }
+
+     *weightedSum = sum;
+}
+
+
 static void macsOnRange(const UDATA_T* __restrict inputs,
                         const WDATA_T* __restrict weights,
                         SUM_T* __restrict weightedSum,
@@ -571,7 +617,7 @@ static void fccellPropagateDATA_T(
                                     * (iy + CHANNELS_HEIGHT * och);
 
             if (!wrapInRange && INPUT_MEM_STRIDE == NB_CHANNELS) {
-                macsOnRange(
+                macsOnRange_no_alined_for_fc2(
                     inputs + iOffset, 
                     weights + wOffset, 
                     &weightedSum, NB_CHANNELS * CHANNELS_WIDTH);
@@ -588,7 +634,7 @@ static void fccellPropagateDATA_T(
                                     - INPUT_MEM_CONT_SIZE;
                     }
 
-                    macsOnRange(
+                    macsOnRange_no_alined_for_fc2(
                         inputs + iOffsetInRange, 
                         weights + wOffset + ix * NB_CHANNELS, 
                         &weightedSum, NB_CHANNELS);
