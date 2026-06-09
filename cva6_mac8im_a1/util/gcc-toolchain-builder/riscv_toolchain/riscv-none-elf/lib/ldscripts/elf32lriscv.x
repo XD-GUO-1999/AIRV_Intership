@@ -7,7 +7,7 @@ OUTPUT_FORMAT("elf32-littleriscv", "elf32-littleriscv",
 	      "elf32-littleriscv")
 OUTPUT_ARCH(riscv)
 ENTRY(_start)
-SEARCH_DIR("/home/imtuser/AIRV/cva6-softcore-contest/util/gcc-toolchain-builder/riscv_toolchain/riscv-none-elf/lib");
+SEARCH_DIR("/home/imtuser/AIRV/cva6_mac8im_a1/util/gcc-toolchain-builder/riscv_toolchain/riscv-none-elf/lib");
 SECTIONS
 {
   /* Read-only sections, merged into text segment: */

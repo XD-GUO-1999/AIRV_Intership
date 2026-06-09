@@ -231,10 +231,6 @@ module issue_stage
       .rs1_forwarding_o   (rs1_forwarding_xlen),
       .rs2_forwarding_o   (rs2_forwarding_xlen),
       .stall_issue_o      (stall_issue_o),
-      //modification
-      .rs3_forwarding_i   (rs3_forwarding_xlen),
-      .rs4_forwarding_i   (rs4_forwarding_xlen),
-      .rs5_forwarding_i   (rs5_forwarding_xlen),
       .*
   );
 

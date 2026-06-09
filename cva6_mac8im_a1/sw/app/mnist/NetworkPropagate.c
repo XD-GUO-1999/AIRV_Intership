@@ -76,9 +76,9 @@ static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
         const UDATA_T *p_wt = weights + iter;
 
         uintptr_t addr_in = (uintptr_t)p_in;
-        uintptr_t addr_wt = (uintptr_t)p_wt;
+        //uintptr_t addr_wt = (uintptr_t)p_wt;
         
-        if(((addr_in & 0x3) == 0) && ((addr_wt & 0x3) == 0)){
+        if((addr_in & 0x3) == 0){
             asm volatile(
                 "lw t3, 0(%[p_in]) \n\t"
                 "lw t4, 0(%[p_wt]) \n\t"
@@ -108,6 +108,55 @@ static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
             sum += inputs[iter] * weights[iter];
         }
 
+     *weightedSum = sum;
+}
+
+static void macsOnRange_no_alined_for_fc2(const UDATA_T* __restrict inputs,
+                        const WDATA_T* __restrict weights,
+                        SUM_T* __restrict weightedSum,
+                        int nb_iterations)
+{
+    int32_t sum = *weightedSum;
+    int iter = 0;
+    uintptr_t addr_in = (uintptr_t)weights;
+    if ((addr_in & 0x3) == 0) {
+        for (; iter <= nb_iterations - 8; iter += 8) {
+            const UDATA_T *p_in = inputs + iter;
+            const UDATA_T *p_wt = weights + iter;
+            asm volatile(
+                "lw t3, 0(%[p_in]) \n\t"
+                "lw t4, 0(%[p_wt]) \n\t"
+                "lw t1, 4(%[p_in]) \n\t"
+                "lw t2, 4(%[p_wt]) \n\t"
+
+                "mac8im %[sum], t1, t2 \n\t"
+                : [sum] "+r" (sum)
+                : [p_in] "r" (p_in), 
+                [p_wt] "r" (p_wt)
+                : "t1", "t2", "t3", "t4", "cc", "memory"
+            );
+        }
+        for (; iter < nb_iterations; ++iter)
+        {
+            sum += inputs[iter] * weights[iter];
+        }        
+    }else{
+            for (; iter <= nb_iterations - 8; iter += 8) {
+            sum += inputs[iter + 0] * weights[iter + 0];
+            sum += inputs[iter + 1] * weights[iter + 1];
+            sum += inputs[iter + 2] * weights[iter + 2];
+            sum += inputs[iter + 3] * weights[iter + 3];
+            sum += inputs[iter + 4] * weights[iter + 4];
+            sum += inputs[iter + 5] * weights[iter + 5];
+            sum += inputs[iter + 6] * weights[iter + 6];
+            sum += inputs[iter + 7] * weights[iter + 7];
+
+            for (; iter < nb_iterations; ++iter)
+            {
+                sum += inputs[iter] * weights[iter];
+            }     
+        }
+    }
      *weightedSum = sum;
 }
 
@@ -582,7 +631,7 @@ static void fccellPropagateDATA_T(
                                     * (iy + CHANNELS_HEIGHT * och);
 
             if (!wrapInRange && INPUT_MEM_STRIDE == NB_CHANNELS) {
-                macsOnRange(
+                macsOnRange_no_alined_for_fc2(
                     inputs + iOffset, 
                     weights + wOffset, 
                     &weightedSum, NB_CHANNELS * CHANNELS_WIDTH);
@@ -599,7 +648,7 @@ static void fccellPropagateDATA_T(
                                     - INPUT_MEM_CONT_SIZE;
                     }
 
-                    macsOnRange(
+                    macsOnRange_no_alined_for_fc2(
                         inputs + iOffsetInRange, 
                         weights + wOffset + ix * NB_CHANNELS, 
                         &weightedSum, NB_CHANNELS);
