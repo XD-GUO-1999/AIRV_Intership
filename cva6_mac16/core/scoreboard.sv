@@ -391,7 +391,7 @@ module scoreboard #(
   assign rs2_valid_o = rs2_valid & ((|rs2_i) | (CVA6Cfg.FpPresent && ariane_pkg::is_rs2_fpr(
       issue_instr_o.op
   )));
-  assign rs3_valid_o = CVA6Cfg.NrRgprPorts == 5 ? rs3_valid & ((|rs3_i) | (CVA6Cfg.FpPresent && ariane_pkg::is_imm_fpr( //modification 3 -> 5
+  assign rs3_valid_o = CVA6Cfg.NrRgprPorts == 9 ? rs3_valid & ((|rs3_i) | (CVA6Cfg.FpPresent && ariane_pkg::is_imm_fpr( //modification 3 -> 5
       issue_instr_o.op
   ))) : rs3_valid;
 //modification: check if we are in x0 for s4 s5
@@ -463,7 +463,7 @@ module scoreboard #(
       .idx_o  ()
   );
 
-  //modification
+  //modification, add rs4 and rs5 tree
     rr_arb_tree #(
       .NumIn(NR_ENTRIES + CVA6Cfg.NrWbPorts),
       .DataWidth(riscv::XLEN),

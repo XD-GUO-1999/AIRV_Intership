@@ -558,7 +558,7 @@ module issue_read_operands
   logic [CVA6Cfg.NrCommitPorts-1:0][riscv::XLEN-1:0] wdata_pack;
   logic [CVA6Cfg.NrCommitPorts-1:0]                  we_pack;
 
-  if (CVA6Cfg.NrRgprPorts == 9) begin : gen_rs3 //modification
+  if (CVA6Cfg.NrRgprPorts == 9) begin : gen_rs9 //modification
   assign raddr_pack = {
         (issue_instr_i.op == ariane_pkg::MAC16) ? 5'd31 : 5'd0, 
         (issue_instr_i.op == ariane_pkg::MAC16) ? 5'd30 : 5'd0, 
@@ -668,7 +668,7 @@ module issue_read_operands
     end
   endgenerate
 
-  if (CVA6Cfg.NrRgprPorts == 5) begin : gen_operand_c
+  if (CVA6Cfg.NrRgprPorts == 9) begin : gen_operand_c //modification 5 -> 9
     assign operand_c_fpr = {{riscv::XLEN-CVA6Cfg.FLen{1'b0}}, fprdata[2]};
     assign operand_c_gpr = rdata[2];
   end else begin
@@ -690,26 +690,6 @@ module issue_read_operands
   assign operand_h_regfile = (CVA6Cfg.NrRgprPorts == 9) ? rdata[7] : 0;
   assign operand_i_regfile = (CVA6Cfg.NrRgprPorts == 9) ? rdata[8] : 0;
 
-// synthesis translate_off modification to debug mac8im instruction, remove it after verification
-// always_ff @(posedge clk_i) begin
-//   if (rst_ni && issue_instr_valid_i && issue_instr_i.op == ariane_pkg::MAC8IM) begin
-//     $display("[MAC8IM][%0t] rd=%0d rs1=%0d rs2=%0d | raddr_pack[2]=%0d rdata[2]=0x%08h operand_c_regfile=0x%08h imm_n=0x%08h imm_q=0x%08h issue_ack=%0b stall=%0b bits(rs3_i)=%0d bits(operand_c_regfile)=%0d bits(operand_c_gpr)=%0d",
-//              $time,
-//              issue_instr_i.rd,
-//              issue_instr_i.rs1,
-//              issue_instr_i.rs2,
-//              raddr_pack[2],
-//              rdata[2],
-//              operand_c_regfile,
-//              imm_n,
-//              imm_q,
-//              issue_ack_o,
-//              stall,
-//              $bits(rs3_i), $bits(operand_c_regfile), $bits(operand_c_gpr));
-//   end
-// end
-// ////////////////
-
   // ----------------------
   // Registers (ID <-> EX)
   // ----------------------
@@ -720,6 +700,10 @@ module issue_read_operands
       //modification
       operand_d_q           <= '{default: 0};
       operand_e_q           <= '{default: 0};
+      operand_f_q           <= '{default: 0};
+      operand_g_q           <= '{default: 0};
+      operand_h_q           <= '{default: 0};
+      operand_i_q           <= '{default: 0};
 
       imm_q                 <= '0;
       fu_q                  <= NONE;
@@ -734,6 +718,10 @@ module issue_read_operands
       //modification : send
       operand_d_q           <= operand_d_n;
       operand_e_q           <= operand_e_n;
+      operand_f_q           <= operand_f_n;
+      operand_g_q           <= operand_g_n;
+      operand_h_q           <= operand_h_n;
+      operand_i_q           <= operand_i_n;
 
       imm_q                 <= imm_n;
       fu_q                  <= fu_n;

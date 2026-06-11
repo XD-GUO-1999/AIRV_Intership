@@ -18,24 +18,25 @@ static inline int32_t mac16_test_with_lw(const uint32_t *pa_packed, const uint32
 
     asm volatile(
         // 【隐式通道加载】把后半部分的 8 个元素动态加载到 t3 ~ t6 (x28 ~ x31)
-        "lw t3, 8(%[pa])\n\t"      // 隐式 t3 = input[8..11]
-        "lw t4, 12(%[pa])\n\t"     // 隐式 t4 = input[12..15]
-        "lw t5, 8(%[pb])\n\t"      // 隐式 t5 = weight[8..11]
-        "lw t6, 12(%[pb])\n\t"     // 隐式 t6 = weight[12..15]
+        "lw t3, 0(%[pa])\n\t"      // 隐式 t3 = input[8..11]
+        "lw t4, 0(%[pb])\n\t"     // 隐式 t4 = input[12..15]
+        "lw t5, 4(%[pa])\n\t"      // 隐式 t5 = weight[8..11]
+        "lw t6, 4(%[pb])\n\t"     // 隐式 t6 = weight[12..15]
+
+        "lw t0, 8(%[pa])\n\t"      // 隐式 t3 = input[8..11]
+        "lw t1, 8(%[pb])\n\t"     // 隐式 t4 = input[12..15]
+        "lw a0, 12(%[pa])\n\t"      // 隐式 t5 = weight[8..11]
+        "lw a1, 12(%[pb])\n\t"     // 隐式 t6 = weight[12..15]
 
         // 【超级指令发射】调用你的 4 显式魔改算子
         // %[rs1] 和 %[rs2] 传输前半部分像素，%[rs3] 和 %[rs4] 传输前半部分权重
-        "mac16 %[sum], %[rs1], %[rs2], %[rs3], %[rs4]\n\t"
+        "mac16 %[sum], t0, t1, a0, a1\n\t"
 
         : [sum] "+r" (sum)
-        : [rs1] "r" (pa_packed[0]),   // 显式第一个像素块 input[0..3]
-          [rs2] "r" (pa_packed[1]),   // 显式第二个像素块 input[4..7]
-          [rs3] "r" (pb_packed[0]),   // 显式第一个权重块 weight[0..3]
-          [rs4] "r" (pb_packed[1]),   // 显式第二个权重块 weight[4..7]
-          [pa]  "r" (pa_packed),      // 传递指针基址供上面 lw 偏移使用
+        : [pa]  "r" (pa_packed),      // 传递指针基址供上面 lw 偏移使用
           [pb]  "r" (pb_packed)
         // 告知 GCC 编译器：t3, t4, t5, t6 被硬件隐式征用了，请主动避让
-        : "t1", "t2", "t3", "t4", "t5", "t6", "cc", "memory" 
+        : "a1", "a0", "t0","t1", "t2", "t3", "t4", "t5", "t6", "cc", "memory" 
     );
 
     return sum;
@@ -70,16 +71,14 @@ int main(void)
 
     // 3. 打印对账结果
     printf("====================================\n");
-    printf("MAC16 Super-Instruction (9-Reg) Test\n");
+    printf("MAC16 Test\n");
     printf("====================================\n");
     printf("init = %ld\n", init);
     printf("ref  = %ld (Expected: 68)\n", ref);
     printf("hw   = %ld\n", hw);
 
     if (hw == ref) {
-        printf("\n🎉 [SUCCESS] PASS!\n");
-    } else {
-        printf("\n❌ [ERROR] FAIL! Check your multiplier tree or bypass network.\n");
+        printf("PASS!\n");
     }
 
     return 0;
