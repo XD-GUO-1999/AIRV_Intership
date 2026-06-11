@@ -5,8 +5,10 @@
 # =========================
 
 # Project root
-export PROJECTROOT=/home/imtuser/AIRV/cva6-softcore-contest
-
+export PROJECTROOT=/home/imtuser/AIRV/cva6_mac16
+#export PROJECTROOT=/home/imtuser/AIRV/cva6_mac8ex_a1
+#export PROJECTROOT=/home/imtuser/AIRV/cva6_mac8im_a1
+#export PROJECTROOT=/home/imtuser/AIRV/cva6_mac8
 # =========================
 # Vivado / Vitis 2024.1
 # =========================
