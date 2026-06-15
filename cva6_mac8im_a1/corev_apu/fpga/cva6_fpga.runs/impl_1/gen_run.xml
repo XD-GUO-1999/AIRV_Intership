@@ -2,89 +2,75 @@
 <GenRun Id="impl_1" LaunchPart="xc7z020clg400-1" LaunchTime="1781018756">
   <File Type="POSTROUTE-PHYSOPT-RQS-RPT" Name="postroute_physopt_report_qor_suggestions_0.rpt"/>
   <File Type="ROUTE-RQS-RPT" Name="route_report_qor_suggestions_0.rpt"/>
-  <File Type="POSTROUTE-PHYSOPT-RQS" Name="cva6_zybo_z7_20_postroute_physopted.rqs"/>
-  <File Type="ROUTE-RQS" Name="cva6_zybo_z7_20_routed.rqs"/>
-  <File Type="WBT-USG" Name="usage_statistics_webtalk.html"/>
-  <File Type="ROUTE-METHODOLOGY-DRC-PB" Name="cva6_zybo_z7_20_methodology_drc_routed.pb"/>
-  <File Type="ROUTE-METHODOLOGY-DRC-RPX" Name="cva6_zybo_z7_20_methodology_drc_routed.rpx"/>
-  <File Type="ROUTE-BLACKBOX-DCP" Name="cva6_zybo_z7_20_routed_bb.dcp"/>
-  <File Type="ROUTE-METHODOLOGY-DRC" Name="cva6_zybo_z7_20_methodology_drc_routed.rpt"/>
   <File Type="ROUTE-DCP" Name="cva6_zybo_z7_20_routed.dcp"/>
-  <File Type="ROUTE-DRC-RPX" Name="cva6_zybo_z7_20_drc_routed.rpx"/>
-  <File Type="ROUTE-ERROR-DCP" Name="cva6_zybo_z7_20_routed_error.dcp"/>
-  <File Type="PHYSOPT-TIMING" Name="cva6_zybo_z7_20_timing_summary_physopted.rpt"/>
-  <File Type="PHYSOPT-DCP" Name="cva6_zybo_z7_20_physopt.dcp"/>
-  <File Type="POSTPLACE-PWROPT-TIMING" Name="cva6_zybo_z7_20_timing_summary_postplace_pwropted.rpt"/>
-  <File Type="POSTPLACE-PWROPT-DCP" Name="cva6_zybo_z7_20_postplace_pwropt.dcp"/>
+  <File Type="ROUTE-STATUS" Name="cva6_zybo_z7_20_route_status.rpt"/>
+  <File Type="ROUTE-PWR-RPX" Name="cva6_zybo_z7_20_power_routed.rpx"/>
+  <File Type="ROUTE-PWR-SUM" Name="cva6_zybo_z7_20_power_summary_routed.pb"/>
+  <File Type="ROUTE-PWR" Name="cva6_zybo_z7_20_power_routed.rpt"/>
   <File Type="ROUTE-DRC-PB" Name="cva6_zybo_z7_20_drc_routed.pb"/>
-  <File Type="PLACE-TIMING" Name="cva6_zybo_z7_20_timing_summary_placed.rpt"/>
+  <File Type="ROUTE-DRC" Name="cva6_zybo_z7_20_drc_routed.rpt"/>
+  <File Type="PLACE-PRE-SIMILARITY" Name="cva6_zybo_z7_20_incremental_reuse_pre_placed.rpt"/>
   <File Type="PLACE-CTRL" Name="cva6_zybo_z7_20_control_sets_placed.rpt"/>
   <File Type="PLACE-UTIL-PB" Name="cva6_zybo_z7_20_utilization_placed.pb"/>
-  <File Type="OPT-DRC" Name="cva6_zybo_z7_20_drc_opted.rpt"/>
-  <File Type="OPT-DCP" Name="cva6_zybo_z7_20_opt.dcp"/>
-  <File Type="PHYSOPT-DRC" Name="cva6_zybo_z7_20_drc_physopted.rpt"/>
-  <File Type="PA-DCP" Name="cva6_zybo_z7_20.dcp"/>
-  <File Type="POSTROUTE-PHYSOPT-TIMING-RPX" Name="cva6_zybo_z7_20_timing_summary_postroute_physopted.rpx"/>
-  <File Type="ROUTE-DRC" Name="cva6_zybo_z7_20_drc_routed.rpt"/>
-  <File Type="PWROPT-TIMING" Name="cva6_zybo_z7_20_timing_summary_pwropted.rpt"/>
-  <File Type="PLACE-SIMILARITY" Name="cva6_zybo_z7_20_incremental_reuse_placed.rpt"/>
-  <File Type="INIT-TIMING" Name="cva6_zybo_z7_20_timing_summary_init.rpt"/>
-  <File Type="OPT-METHODOLOGY-DRC" Name="cva6_zybo_z7_20_methodology_drc_opted.rpt"/>
-  <File Type="OPT-HWDEF" Name="cva6_zybo_z7_20.hwdef"/>
-  <File Type="PA-TCL" Name="cva6_zybo_z7_20.tcl"/>
-  <File Type="ROUTE-BUS-SKEW-PB" Name="cva6_zybo_z7_20_bus_skew_routed.pb"/>
-  <File Type="REPORTS-TCL" Name="cva6_zybo_z7_20_reports.tcl"/>
-  <File Type="ROUTE-BUS-SKEW-RPX" Name="cva6_zybo_z7_20_bus_skew_routed.rpx"/>
-  <File Type="PWROPT-DRC" Name="cva6_zybo_z7_20_drc_pwropted.rpt"/>
-  <File Type="PLACE-PRE-SIMILARITY" Name="cva6_zybo_z7_20_incremental_reuse_pre_placed.rpt"/>
-  <File Type="OPT-TIMING" Name="cva6_zybo_z7_20_timing_summary_opted.rpt"/>
-  <File Type="PWROPT-DCP" Name="cva6_zybo_z7_20_pwropt.dcp"/>
-  <File Type="PLACE-DCP" Name="cva6_zybo_z7_20_placed.dcp"/>
-  <File Type="OPT-RQA-PB" Name="cva6_zybo_z7_20_rqa_opted.pb"/>
-  <File Type="PLACE-IO" Name="cva6_zybo_z7_20_io_placed.rpt"/>
-  <File Type="PLACE-RQA-PB" Name="cva6_zybo_z7_20_rqa_placed.pb"/>
-  <File Type="PLACE-CLK" Name="cva6_zybo_z7_20_clock_utilization_placed.rpt"/>
   <File Type="PLACE-UTIL" Name="cva6_zybo_z7_20_utilization_placed.rpt"/>
-  <File Type="ROUTE-PWR" Name="cva6_zybo_z7_20_power_routed.rpt"/>
-  <File Type="ROUTE-PWR-SUM" Name="cva6_zybo_z7_20_power_summary_routed.pb"/>
-  <File Type="ROUTE-PWR-RPX" Name="cva6_zybo_z7_20_power_routed.rpx"/>
-  <File Type="ROUTE-STATUS" Name="cva6_zybo_z7_20_route_status.rpt"/>
+  <File Type="PLACE-IO" Name="cva6_zybo_z7_20_io_placed.rpt"/>
+  <File Type="OPT-HWDEF" Name="cva6_zybo_z7_20.hwdef"/>
   <File Type="ROUTE-STATUS-PB" Name="cva6_zybo_z7_20_route_status.pb"/>
-  <File Type="ROUTE-TIMINGSUMMARY" Name="cva6_zybo_z7_20_timing_summary_routed.rpt"/>
-  <File Type="ROUTE-TIMING-PB" Name="cva6_zybo_z7_20_timing_summary_routed.pb"/>
-  <File Type="ROUTE-TIMING-RPX" Name="cva6_zybo_z7_20_timing_summary_routed.rpx"/>
-  <File Type="ROUTE-SIMILARITY" Name="cva6_zybo_z7_20_incremental_reuse_routed.rpt"/>
-  <File Type="ROUTE-CLK" Name="cva6_zybo_z7_20_clock_utilization_routed.rpt"/>
-  <File Type="ROUTE-BUS-SKEW" Name="cva6_zybo_z7_20_bus_skew_routed.rpt"/>
-  <File Type="ROUTE-RQS-PB" Name="cva6_zybo_z7_20_rqs_routed.pb"/>
-  <File Type="POSTROUTE-PHYSOPT-DCP" Name="cva6_zybo_z7_20_postroute_physopt.dcp"/>
-  <File Type="POSTROUTE-PHYSOPT-BLACKBOX-DCP" Name="cva6_zybo_z7_20_postroute_physopt_bb.dcp"/>
-  <File Type="POSTROUTE-PHYSOPT-TIMING" Name="cva6_zybo_z7_20_timing_summary_postroute_physopted.rpt"/>
-  <File Type="POSTROUTE-PHYSOPT-TIMING-PB" Name="cva6_zybo_z7_20_timing_summary_postroute_physopted.pb"/>
-  <File Type="RDI-RDI" Name="cva6_zybo_z7_20.vdi"/>
-  <File Type="POSTROUTE-PHYSOPT-BUS-SKEW" Name="cva6_zybo_z7_20_bus_skew_postroute_physopted.rpt"/>
-  <File Type="POSTROUTE-PHYSOPT-BUS-SKEW-PB" Name="cva6_zybo_z7_20_bus_skew_postroute_physopted.pb"/>
-  <File Type="POSTROUTE-PHYSOPT-BUS-SKEW-RPX" Name="cva6_zybo_z7_20_bus_skew_postroute_physopted.rpx"/>
   <File Type="BG-BIT" Name="cva6_zybo_z7_20.bit"/>
   <File Type="PDI-FILE" Name="cva6_zybo_z7_20.pdi"/>
+  <File Type="PA-DCP" Name="cva6_zybo_z7_20.dcp"/>
+  <File Type="POSTROUTE-PHYSOPT-TIMING-RPX" Name="cva6_zybo_z7_20_timing_summary_postroute_physopted.rpx"/>
+  <File Type="ROUTE-BLACKBOX-DCP" Name="cva6_zybo_z7_20_routed_bb.dcp"/>
+  <File Type="BG-BGN" Name="cva6_zybo_z7_20.bgn"/>
+  <File Type="RCFI_FILE" Name="cva6_zybo_z7_20.rcfi"/>
+  <File Type="ROUTE-ERROR-DCP" Name="cva6_zybo_z7_20_routed_error.dcp"/>
+  <File Type="BG-DRC" Name="cva6_zybo_z7_20.drc"/>
+  <File Type="RDI-RDI" Name="cva6_zybo_z7_20.vdi"/>
+  <File Type="POSTROUTE-PHYSOPT-TIMING-PB" Name="cva6_zybo_z7_20_timing_summary_postroute_physopted.pb"/>
+  <File Type="WBT-USG" Name="usage_statistics_webtalk.html"/>
+  <File Type="POSTROUTE-PHYSOPT-RQS" Name="cva6_zybo_z7_20_postroute_physopted.rqs"/>
+  <File Type="ROUTE-TIMINGSUMMARY" Name="cva6_zybo_z7_20_timing_summary_routed.rpt"/>
   <File Type="BG-BIN" Name="cva6_zybo_z7_20.bin"/>
   <File Type="CFI_FILE" Name="cva6_zybo_z7_20.cfi"/>
+  <File Type="OPT-DRC" Name="cva6_zybo_z7_20_drc_opted.rpt"/>
+  <File Type="ROUTE-TIMING-PB" Name="cva6_zybo_z7_20_timing_summary_routed.pb"/>
+  <File Type="PA-TCL" Name="cva6_zybo_z7_20.tcl"/>
+  <File Type="ROUTE-BUS-SKEW-PB" Name="cva6_zybo_z7_20_bus_skew_routed.pb"/>
   <File Type="BITSTR-MSK" Name="cva6_zybo_z7_20.msk"/>
   <File Type="RNPI_FILE" Name="cva6_zybo_z7_20.rnpi"/>
+  <File Type="REPORTS-TCL" Name="cva6_zybo_z7_20_reports.tcl"/>
+  <File Type="ROUTE-BUS-SKEW-RPX" Name="cva6_zybo_z7_20_bus_skew_routed.rpx"/>
   <File Type="BITSTR-RBT" Name="cva6_zybo_z7_20.rbt"/>
   <File Type="NPI_FILE" Name="cva6_zybo_z7_20.npi"/>
   <File Type="BITSTR-NKY" Name="cva6_zybo_z7_20.nky"/>
   <File Type="RBD_FILE" Name="cva6_zybo_z7_20.rbd"/>
   <File Type="BITSTR-BMM" Name="cva6_zybo_z7_20_bd.bmm"/>
   <File Type="BITSTR-MMI" Name="cva6_zybo_z7_20.mmi"/>
-  <File Type="BOOT-PDI-FILE" Name="cva6_zybo_z7_20_boot.pdi"/>
-  <File Type="PL-PDI-FILE" Name="cva6_zybo_z7_20_pld.pdi"/>
-  <File Type="RCFI_FILE" Name="cva6_zybo_z7_20.rcfi"/>
-  <File Type="BG-BGN" Name="cva6_zybo_z7_20.bgn"/>
+  <File Type="BITSTR-SYSDEF" Name="cva6_zybo_z7_20.sysdef"/>
   <File Type="BITSTR-LTX" Name="debug_nets.ltx"/>
   <File Type="BITSTR-LTX" Name="cva6_zybo_z7_20.ltx"/>
-  <File Type="BITSTR-SYSDEF" Name="cva6_zybo_z7_20.sysdef"/>
-  <File Type="BG-DRC" Name="cva6_zybo_z7_20.drc"/>
+  <File Type="ROUTE-TIMING-RPX" Name="cva6_zybo_z7_20_timing_summary_routed.rpx"/>
+  <File Type="ROUTE-SIMILARITY" Name="cva6_zybo_z7_20_incremental_reuse_routed.rpt"/>
+  <File Type="ROUTE-CLK" Name="cva6_zybo_z7_20_clock_utilization_routed.rpt"/>
+  <File Type="ROUTE-BUS-SKEW" Name="cva6_zybo_z7_20_bus_skew_routed.rpt"/>
+  <File Type="OPT-DCP" Name="cva6_zybo_z7_20_opt.dcp"/>
+  <File Type="PLACE-DCP" Name="cva6_zybo_z7_20_placed.dcp"/>
+  <File Type="PWROPT-DCP" Name="cva6_zybo_z7_20_pwropt.dcp"/>
+  <File Type="POSTPLACE-PWROPT-DCP" Name="cva6_zybo_z7_20_postplace_pwropt.dcp"/>
+  <File Type="PHYSOPT-DCP" Name="cva6_zybo_z7_20_physopt.dcp"/>
+  <File Type="POSTROUTE-PHYSOPT-DCP" Name="cva6_zybo_z7_20_postroute_physopt.dcp"/>
+  <File Type="POSTROUTE-PHYSOPT-BLACKBOX-DCP" Name="cva6_zybo_z7_20_postroute_physopt_bb.dcp"/>
+  <File Type="POSTROUTE-PHYSOPT-TIMING" Name="cva6_zybo_z7_20_timing_summary_postroute_physopted.rpt"/>
+  <File Type="POSTROUTE-PHYSOPT-BUS-SKEW" Name="cva6_zybo_z7_20_bus_skew_postroute_physopted.rpt"/>
+  <File Type="POSTROUTE-PHYSOPT-BUS-SKEW-PB" Name="cva6_zybo_z7_20_bus_skew_postroute_physopted.pb"/>
+  <File Type="POSTROUTE-PHYSOPT-BUS-SKEW-RPX" Name="cva6_zybo_z7_20_bus_skew_postroute_physopted.rpx"/>
+  <File Type="ROUTE-METHODOLOGY-DRC" Name="cva6_zybo_z7_20_methodology_drc_routed.rpt"/>
+  <File Type="ROUTE-METHODOLOGY-DRC-PB" Name="cva6_zybo_z7_20_methodology_drc_routed.pb"/>
+  <File Type="ROUTE-DRC-RPX" Name="cva6_zybo_z7_20_drc_routed.rpx"/>
+  <File Type="ROUTE-METHODOLOGY-DRC-RPX" Name="cva6_zybo_z7_20_methodology_drc_routed.rpx"/>
+  <File Type="BOOT-PDI-FILE" Name="cva6_zybo_z7_20_boot.pdi"/>
+  <File Type="PL-PDI-FILE" Name="cva6_zybo_z7_20_pld.pdi"/>
+  <File Type="ROUTE-RQS" Name="cva6_zybo_z7_20_routed.rqs"/>
   <FileSet Name="sources" Type="DesignSrcs" RelSrcDir="$PSRCDIR/sources_1" RelGenDir="$PGENDIR/sources_1">
     <Filter Type="Srcs"/>
     <File Path="$PPRDIR/src/zybo-z7-20.svh">
@@ -2064,9 +2050,7 @@
     </Config>
   </FileSet>
   <Strategy Version="1" Minor="2">
-    <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2024">
-      <Desc>Default settings for Implementation.</Desc>
-    </StratHandle>
+    <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2024"/>
     <Step Id="init_design"/>
     <Step Id="opt_design"/>
     <Step Id="power_opt_design"/>
@@ -2080,5 +2064,6 @@
     </Step>
     <Step Id="post_route_phys_opt_design"/>
     <Step Id="write_bitstream"/>
+    <Step Id="write_device_image"/>
   </Strategy>
 </GenRun>
