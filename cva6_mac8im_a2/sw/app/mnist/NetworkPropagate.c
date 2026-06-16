@@ -149,13 +149,13 @@ static void macsOnRange_no_alined_for_fc2(const UDATA_T* __restrict inputs,
             sum += inputs[iter + 4] * weights[iter + 4];
             sum += inputs[iter + 5] * weights[iter + 5];
             sum += inputs[iter + 6] * weights[iter + 6];
-            sum += inputs[iter + 7] * weights[iter + 7];
+            sum += inputs[iter + 7] * weights[iter + 7];     
+            }
 
             for (; iter < nb_iterations; ++iter)
             {
                 sum += inputs[iter] * weights[iter];
-            }     
-        }
+            }
     }
      *weightedSum = sum;
 }
@@ -835,11 +835,11 @@ void propagate(const UDATA_T* inputs, Target_T* outputs, UDATA_T* maxPropagate_v
     fclose(fc2_stream);
 #endif
 //modifcation debug
-    printf("fc2_output = ");
-    for (int i = 0; i < 10; i++) {
-        printf("%d ", fc2_output[i]);
-    }
-    printf("\n");
+    // printf("fc2_output = ");
+    // for (int i = 0; i < 10; i++) {
+    //     printf("%d ", fc2_output[i]);
+    // }
+    // printf("\n");
     maxPropagate1(fc2_output, outputs, maxPropagate_val, FC2_NB_OUTPUTS, FC2_OUTPUTS_HEIGHT, FC2_OUTPUTS_WIDTH, FC2_MEM_CONT_OFFSET, FC2_MEM_CONT_SIZE, FC2_MEM_WRAP_OFFSET, FC2_MEM_WRAP_SIZE, FC2_MEM_STRIDE);
 
 #ifdef SAVE_OUTPUTS
