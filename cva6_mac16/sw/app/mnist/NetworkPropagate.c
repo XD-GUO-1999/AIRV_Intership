@@ -169,7 +169,7 @@ static void macsOnRange_no_alined_for_fc2(const UDATA_T* __restrict inputs,
             sum += inputs[iter] * weights[iter];
         }        
     }else{
-            for (; iter <= nb_iterations - 8; iter += 8) {
+            for (; iter <= nb_iterations - 16; iter += 16) {
             sum += inputs[iter + 0] * weights[iter + 0];
             sum += inputs[iter + 1] * weights[iter + 1];
             sum += inputs[iter + 2] * weights[iter + 2];
@@ -296,7 +296,7 @@ static void convcellPropagate1(
 
                 SUM_T weightedSum = biasses[output]; // add biasses of kernel firstly
 
-                for (int sy = 0; sy <= KERNEL_HEIGHT - 2; sy += 2) { //in the kernel, start by line
+                for (int sy = 0; sy <= KERNEL_HEIGHT - 4; sy += 4) { //in the kernel, start by line
                     if ((PADDING_Y != 0
                             || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
                         && sy >= syMax - syMin)
@@ -870,11 +870,11 @@ void propagate(const UDATA_T* inputs, Target_T* outputs, UDATA_T* maxPropagate_v
     fclose(fc2_stream);
 #endif
 //modifcation debug
-    printf("fc2_output = ");
-    for (int i = 0; i < 10; i++) {
-        printf("%d ", fc2_output[i]);
-    }
-    printf("\n");
+    // printf("fc2_output = ");
+    // for (int i = 0; i < 10; i++) {
+    //     printf("%d ", fc2_output[i]);
+    // }
+    // printf("\n");
     maxPropagate1(fc2_output, outputs, maxPropagate_val, FC2_NB_OUTPUTS, FC2_OUTPUTS_HEIGHT, FC2_OUTPUTS_WIDTH, FC2_MEM_CONT_OFFSET, FC2_MEM_CONT_SIZE, FC2_MEM_WRAP_OFFSET, FC2_MEM_WRAP_SIZE, FC2_MEM_STRIDE);
 
 #ifdef SAVE_OUTPUTS
