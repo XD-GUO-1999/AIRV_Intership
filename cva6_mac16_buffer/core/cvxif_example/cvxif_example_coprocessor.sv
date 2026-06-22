@@ -217,12 +217,11 @@ module cvxif_example_coprocessor
     end
   end
 
-  // 结果写回 CVXIF 总线
+
   always_comb begin
     x_result_o.data    = mac_result;
     x_result_o.id      = req_o.req.id;
     x_result_o.rd      = req_o.req.instr[11:7];
-    // 使用 instr_decoder 帮你判断出的 writeback 信号
     x_result_o.we      = req_o.resp.writeback & x_result_valid_o & is_mac16buf_ex; 
     x_result_o.exc     = 0;
     x_result_o.exccode = 0;

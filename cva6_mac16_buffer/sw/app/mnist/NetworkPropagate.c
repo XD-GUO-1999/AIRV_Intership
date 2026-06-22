@@ -28,42 +28,7 @@ static int clamp(int v, int lo, int hi) {
     }
 }
 
-// static void macsOnRange_with_mac4(const UDATA_T* __restrict inputs,
-//                         const WDATA_T* __restrict weights,
-//                         SUM_T* __restrict weightedSum,
-//                         int nb_iterations)
-// {
-//     int32_t sum = *weightedSum;
-//     int iter = 0;
-
-//     for (; iter <= nb_iterations - 8; iter += 8) {
-//         const UDATA_T *p_in = inputs + iter;
-//         const UDATA_T *p_wt = weights + iter;
-//         // const UDATA_T *p_in_low = inputs + iter - 4;
-//         // const UDATA_T *p_wt_low = weights + iter - 4;
-        
-//         asm volatile(
-//         "lw t3, 0(%[p_in]) \n\t"
-//         "lw t4, 0(%[p_wt]) \n\t"
-//         "lw t1, 4(%[p_in]) \n\t"
-//         "lw t2, 4(%[p_wt]) \n\t"
-//         "mac8ex %[sum], t1, t2, t3, t4 \n\t"
-//         : [sum] "+r" (sum)
-//         : [p_in] "r" (p_in), 
-//         [p_wt] "r" (p_wt)
-//         : "t1", "t2", "t3", "t4", "cc", "memory"
-//         );
-//     }
-
-//     for (; iter < nb_iterations; ++iter)
-//         {
-//             sum += inputs[iter] * weights[iter];
-//         }
-
-//      *weightedSum = sum;
-// }
-
-static void inline buffer4(const UDATA_T* __restrict inputs)
+static void inline buffer4_conv1(const UDATA_T* __restrict inputs)
 {        
         const UDATA_T *p_in = inputs;
         asm volatile(
@@ -79,9 +44,45 @@ static void inline buffer4(const UDATA_T* __restrict inputs)
         );
 }
 
+static void inline buffer4(const UDATA_T* __restrict inputs)
+{        
+        const UDATA_T *p_in = inputs;
+        asm volatile(
+                "lw t1, 0(%[p_in]) \n\t"
+                "lw t2, 4(%[p_in]) \n\t"
+                "lw t3, 8(%[p_in]) \n\t"
+                "lw t4, 12(%[p_in]) \n\t"
+
+                "buf4 zero, t1, t2, t3, t4 \n\t"
+                :
+                : [p_in] "r" (p_in)
+                : "t1", "t2", "t3", "t4", "cc", "memory"
+        );
+}
 
 
-static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
+static void mac16(const const WDATA_T* __restrict weights,
+                        SUM_T* __restrict weightedSum)
+{
+    int32_t sum = *weightedSum;
+    int iter = 0;
+        const UDATA_T *p_wt = weights + iter;
+
+        asm volatile(
+        "lw t3, 0(%[p_wt]) \n\t"
+        "lw t4, 4(%[p_wt]) \n\t"
+        "lw t1, 8(%[p_wt]) \n\t"
+        "lw t2, 12(%[p_wt]) \n\t"
+        "mac16buf %[sum], t1, t2, t3, t4 \n\t"
+        : [sum] "+r" (sum)
+        :[p_wt] "r" (p_wt)
+        : "t1", "t2", "t3", "t4", "cc", "memory"
+        );
+     *weightedSum = sum;
+}
+
+
+static void mac16_no_alined(const UDATA_T* __restrict inputs,
                         const WDATA_T* __restrict weights,
                         SUM_T* __restrict weightedSum,
                         int nb_iterations)
@@ -104,8 +105,7 @@ static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
                 "lw t4, 12(%[p_wt]) \n\t"
                 "mac16buf %[sum], t1, t2, t3, t4 \n\t"
                 : [sum] "+r" (sum)
-                : [p_in] "r" (p_in), 
-                [p_wt] "r" (p_wt)
+                :[p_wt] "r" (p_wt)
                 : "t1", "t2", "t3", "t4", "cc", "memory"
             );
         }else{
@@ -347,21 +347,21 @@ static void convcellPropagate1(
                 * sy = 0，因为 KERNEL_HEIGHT = 4，
                 * 当前代码 sy loop 只有一次。
                 */
-                const int sy_buf = 0;
-                const int iPos_buf = ((sxMin + ix)
-                                    + CHANNELS_WIDTH * (iy + syMin + sy_buf));
-                int iOffset_buf = INPUT_MEM_STRIDE * iPos_buf;
+                const int sy = 0;
+                const int iPos = ((sxMin + ix)
+                                    + CHANNELS_WIDTH * (iy + syMin + sy));
+                int iOffset = INPUT_MEM_STRIDE * iPos;
 
-                if (INPUT_MEM_WRAP_SIZE > 0 && iOffset_buf >= INPUT_MEM_CONT_SIZE) {
-                    iOffset_buf += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
+                if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
+                    iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
                                 - INPUT_MEM_CONT_SIZE;
                 }
 
-                const UDATA_T* patch_ptr = inputs + iOffset_buf;
+                const UDATA_T* patch_ptr = inputs + iOffset;
                 const bool patch_aligned = (((uintptr_t)patch_ptr & 0x3) == 0);
 
                 if (patch_aligned) {
-                    buffer4(patch_ptr);
+                    buffer4_conv1(patch_ptr);
                 }
 
                 for (int output = 0; output < NB_OUTPUTS; ++output) {
@@ -374,10 +374,6 @@ static void convcellPropagate1(
                         {
                             break;
                         }
-
-                        const int iPos = ((sxMin + ix)
-                                        + CHANNELS_WIDTH * (iy + syMin + sy));
-                        int iOffset = INPUT_MEM_STRIDE * iPos;
 
                         bool wrapInRange = false;
 
@@ -402,38 +398,11 @@ static void convcellPropagate1(
                             && ((PADDING_X == 0 && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
                                     || sxMax - sxMin == KERNEL_WIDTH)))
                         {
-                            macsOnRange_no_alined(
+                            mac16_no_alined(
                                 inputs + iOffset,
                                 weights + wOffset,
                                 &weightedSum,
                                 KERNEL_WIDTH * NB_CHANNELS * 4);
-                        }
-                        else {
-                            for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
-                                if ((PADDING_X != 0
-                                        || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
-                                    && sx >= sxMax - sxMin)
-                                {
-                                    break;
-                                }
-
-                                int iOffsetInRange = iOffset
-                                    + sx * INPUT_MEM_STRIDE;
-
-                                if (wrapInRange
-                                    && iOffsetInRange >= INPUT_MEM_CONT_SIZE)
-                                {
-                                    iOffsetInRange += INPUT_MEM_WRAP_OFFSET
-                                                - INPUT_MEM_CONT_OFFSET
-                                                - INPUT_MEM_CONT_SIZE;
-                                }
-
-                                macsOnRange(
-                                    inputs + iOffsetInRange,
-                                    weights + wOffset + sx * NB_CHANNELS,
-                                    &weightedSum,
-                                    NB_CHANNELS);
-                            }
                         }
                     }
 
@@ -441,7 +410,6 @@ static void convcellPropagate1(
                         = sat(weightedSum, output, ACTIVATION, rescaling);
                 }
             }
-           ///
     }
 }
 
@@ -487,103 +455,196 @@ static void convcellPropagate2(
                     0, KERNEL_HEIGHT);
         const int iy = (oy * STRIDE_Y) - PADDING_Y;
 
-        for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
+//         for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
+//             for (int output = 0; output < NB_OUTPUTS; ++output) {
+//                 // moved to inner loop for collapsing -->
+//                 const int sxMin = (PADDING_X == 0) ? 0
+//                     : max(PADDING_X - (ox * STRIDE_X), 0);
+//                 const int sxMax = (PADDING_X == 0
+//                         && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
+//                             ? KERNEL_WIDTH
+//                     : clamp(CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_X), 
+//                             0, KERNEL_WIDTH);
+//                 const int ix = (ox * STRIDE_X) - PADDING_X;
+
+//                 const int oPos = (ox + OUTPUTS_WIDTH * oy);
+//                 int oOffset = OUTPUT_MEM_STRIDE * oPos;
+
+//                 if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
+//                     oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
+//                                 - OUTPUT_MEM_CONT_SIZE;
+//                 }
+//                 // <--
+
+//                 SUM_T weightedSum = biasses[output];
+
+//                 for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
+//                     if ((PADDING_Y != 0
+//                             || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
+//                         && sy >= syMax - syMin)
+//                     {
+//                         break;
+//                     }
+
+//                     const int iPos = ((sxMin + ix)
+//                                         + CHANNELS_WIDTH * (iy + syMin + sy));
+//                     int iOffset = INPUT_MEM_STRIDE * iPos;
+
+//                     // Wrapping cannot occur in the middle of a line, except if
+//                     // there is only one line (1D)!
+//                     bool wrapInRange = false;
+
+//                     if (INPUT_MEM_WRAP_SIZE > 0
+//                         && iOffset >= INPUT_MEM_CONT_SIZE)
+//                     {
+//                         iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
+//                                     - INPUT_MEM_CONT_SIZE;
+//                     }
+//                     else if (INPUT_MEM_WRAP_SIZE > 0 && KERNEL_WIDTH > 1
+//                         && CHANNELS_HEIGHT == 1 // single line (1D)!
+//                         && iOffset + KERNEL_WIDTH * NB_CHANNELS
+//                             > INPUT_MEM_CONT_SIZE)
+//                     {
+//                         wrapInRange = true;
+//                     }
+
+//                     const int wOffset = NB_CHANNELS * (sxMin
+//                         + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
+
+//                     if (!wrapInRange && (NB_CHANNELS == INPUT_MEM_STRIDE
+//                         && ((PADDING_X == 0
+//                             && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
+//                                 || sxMax - sxMin == KERNEL_WIDTH)))
+//                     {
+//                         macsOnRange(
+//                             inputs + iOffset, 
+//                             weights + wOffset, 
+//                             &weightedSum,KERNEL_WIDTH * NB_CHANNELS);
+//                     }
+//                     else {
+//                         for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
+//                             if ((PADDING_X != 0
+//                                     || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
+//                                 && sx >= sxMax - sxMin)
+//                             {
+//                                 break;
+//                             }
+
+//                             int iOffsetInRange = iOffset
+//                                 + sx * INPUT_MEM_STRIDE;
+
+//                             if (wrapInRange
+//                                 && iOffsetInRange >= INPUT_MEM_CONT_SIZE)
+//                             {
+//                                 iOffsetInRange += INPUT_MEM_WRAP_OFFSET
+//                                             - INPUT_MEM_CONT_OFFSET
+//                                             - INPUT_MEM_CONT_SIZE;
+//                             }
+
+//                             macsOnRange(
+//                                 // same input line so no wrapping can occur
+//                                 inputs + iOffsetInRange, 
+//                                 weights + wOffset + sx * NB_CHANNELS, 
+//                                 &weightedSum,NB_CHANNELS);
+//                         }
+//                     }
+//                 }
+
+//                 outputs[oOffset + output]
+//                     = sat(weightedSum, output, ACTIVATION, rescaling);
+//             }
+//         }
+//     }
+// }
+for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
+            const int sxMin = (PADDING_X == 0) ? 0
+                : max(PADDING_X - (ox * STRIDE_X), 0);
+            const int sxMax = (PADDING_X == 0
+                    && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
+                        ? KERNEL_WIDTH
+                : clamp(CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_X),
+                        0, KERNEL_WIDTH);
+            const int ix = (ox * STRIDE_X) - PADDING_X;
+
+            const int oPos = (ox + OUTPUTS_WIDTH * oy);
+            int oOffset = OUTPUT_MEM_STRIDE * oPos;
+
+            if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
+                oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
+                            - OUTPUT_MEM_CONT_SIZE;
+            }
+
+            /*
+             * Reordered Conv2 schedule:
+             *   old: output -> sy -> sx
+             *   new: sy -> sx -> output
+             *
+             * One input block is one pixel's 16 channels.
+             * It is buffered once, then reused by all output filters.
+             */
+            SUM_T weightedSum[NB_OUTPUTS];
             for (int output = 0; output < NB_OUTPUTS; ++output) {
-                // moved to inner loop for collapsing -->
-                const int sxMin = (PADDING_X == 0) ? 0
-                    : max(PADDING_X - (ox * STRIDE_X), 0);
-                const int sxMax = (PADDING_X == 0
-                        && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
-                            ? KERNEL_WIDTH
-                    : clamp(CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_X), 
-                            0, KERNEL_WIDTH);
-                const int ix = (ox * STRIDE_X) - PADDING_X;
+                weightedSum[output] = biasses[output];
+            }
 
-                const int oPos = (ox + OUTPUTS_WIDTH * oy);
-                int oOffset = OUTPUT_MEM_STRIDE * oPos;
-
-                if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
-                    oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
-                                - OUTPUT_MEM_CONT_SIZE;
+            for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
+                if ((PADDING_Y != 0 || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
+                    && sy >= syMax - syMin)
+                {
+                    break;
                 }
-                // <--
 
-                SUM_T weightedSum = biasses[output];
-
-                for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
-                    if ((PADDING_Y != 0
-                            || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
-                        && sy >= syMax - syMin)
+                for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
+                    if ((PADDING_X != 0 || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
+                        && sx >= sxMax - sxMin)
                     {
                         break;
                     }
 
-                    const int iPos = ((sxMin + ix)
+                    const int iPos = ((sxMin + sx + ix)
                                         + CHANNELS_WIDTH * (iy + syMin + sy));
                     int iOffset = INPUT_MEM_STRIDE * iPos;
 
-                    // Wrapping cannot occur in the middle of a line, except if
-                    // there is only one line (1D)!
-                    bool wrapInRange = false;
-
-                    if (INPUT_MEM_WRAP_SIZE > 0
-                        && iOffset >= INPUT_MEM_CONT_SIZE)
-                    {
+                    if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
                         iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
                                     - INPUT_MEM_CONT_SIZE;
                     }
-                    else if (INPUT_MEM_WRAP_SIZE > 0 && KERNEL_WIDTH > 1
-                        && CHANNELS_HEIGHT == 1 // single line (1D)!
-                        && iOffset + KERNEL_WIDTH * NB_CHANNELS
-                            > INPUT_MEM_CONT_SIZE)
-                    {
-                        wrapInRange = true;
-                    }
 
-                    const int wOffset = NB_CHANNELS * (sxMin
-                        + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
+                    const UDATA_T* in_ptr = inputs + iOffset;
+                    const bool input_block_ok =
+                        (NB_CHANNELS == 16)
+                        && (INPUT_MEM_STRIDE == NB_CHANNELS)
+                        && (((uintptr_t)in_ptr & 0x3) == 0);
 
-                    if (!wrapInRange && (NB_CHANNELS == INPUT_MEM_STRIDE
-                        && ((PADDING_X == 0
-                            && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
-                                || sxMax - sxMin == KERNEL_WIDTH)))
-                    {
-                        macsOnRange(
-                            inputs + iOffset, 
-                            weights + wOffset, 
-                            &weightedSum,KERNEL_WIDTH * NB_CHANNELS);
+                    if (input_block_ok) {
+                        // Buffer current pixel's 16 channels once.
+                        buffer4(in_ptr);
+
+                        for (int output = 0; output < NB_OUTPUTS; ++output) {
+                            const int wOffset = NB_CHANNELS * (sxMin + sx
+                                + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
+
+                            mac16(weights + wOffset, &weightedSum[output]);
+                        }
                     }
                     else {
-                        for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
-                            if ((PADDING_X != 0
-                                    || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
-                                && sx >= sxMax - sxMin)
-                            {
-                                break;
-                            }
+                        // Safe scalar fallback for unusual layout/alignment/padding cases.
+                        for (int output = 0; output < NB_OUTPUTS; ++output) {
+                            const int wOffset = NB_CHANNELS * (sxMin + sx
+                                + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
 
-                            int iOffsetInRange = iOffset
-                                + sx * INPUT_MEM_STRIDE;
-
-                            if (wrapInRange
-                                && iOffsetInRange >= INPUT_MEM_CONT_SIZE)
-                            {
-                                iOffsetInRange += INPUT_MEM_WRAP_OFFSET
-                                            - INPUT_MEM_CONT_OFFSET
-                                            - INPUT_MEM_CONT_SIZE;
-                            }
-
-                            macsOnRange(
-                                // same input line so no wrapping can occur
-                                inputs + iOffsetInRange, 
-                                weights + wOffset + sx * NB_CHANNELS, 
-                                &weightedSum,NB_CHANNELS);
+                            macsOnRange(inputs + iOffset,
+                                        weights + wOffset,
+                                        &weightedSum[output],
+                                        NB_CHANNELS);
                         }
                     }
                 }
+            }
 
+            for (int output = 0; output < NB_OUTPUTS; ++output) {
                 outputs[oOffset + output]
-                    = sat(weightedSum, output, ACTIVATION, rescaling);
+                    = sat(weightedSum[output], output, ACTIVATION, rescaling);
             }
         }
     }
