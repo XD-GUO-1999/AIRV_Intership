@@ -28,61 +28,138 @@ static int clamp(int v, int lo, int hi) {
     }
 }
 
-static void inline buffer4_conv1(const UDATA_T* __restrict inputs)
-{        
-        const UDATA_T *p_in = inputs;
-        asm volatile(
-                "lw t1, 0(%[p_in]) \n\t"
-                "lw t2, 24(%[p_in]) \n\t"
-                "lw t3, 48(%[p_in]) \n\t"
-                "lw t4, 72(%[p_in]) \n\t"
+/*
+ * ============================================================
+ * 统一 input buffer 辅助函数
+ * ============================================================
+ *
+ * 硬件侧约定：
+ *   - input buffer 最大 400 byte = 100 个 32-bit word = 25 个 16-byte block。
+ *   - buf4 的 rd 字段不作为真正写回寄存器，而是作为 mode：
+ *
+ *         active_blocks = rd + 1
+ *
+ *   - Conv1: rd = x0  -> active_blocks = 1
+ *   - Conv2: rd = x24 -> active_blocks = 25
+ *   - FC1:   rd = x23 -> active_blocks = 24
+ *   - FC2:   rd = x8  -> active_blocks = 9，剩余 6 个 input 走 scalar
+ *
+ * 注意：
+ *   t3 = x28，t4 = x29。硬件里 rs[3]/rs[4] 固定来自 x28/x29，
+ *   所以这里继续用 t3/t4 是匹配的。
+ */
 
-                "buf4 zero, t1, t2, t3, t4 \n\t"
-                :
-                : [p_in] "r" (p_in)
-                : "t1", "t2", "t3", "t4", "cc", "memory"
-        );
+/* Conv1 专用：把一个 4x4x1 patch buffer 进去。
+ * 这里四个指针分别指向 patch 的四行，每行连续 4 个 uint8。
+ * buf4 x0 表示 active_blocks = 1，所以后续每个 mac16buf 都会读 block0。
+ */
+static inline void buffer4_conv1_patch(
+    const UDATA_T* __restrict row0,
+    const UDATA_T* __restrict row1,
+    const UDATA_T* __restrict row2,
+    const UDATA_T* __restrict row3)
+{
+    asm volatile(
+        "lw t1, 0(%[row0]) \n\t"
+        "lw t2, 0(%[row1]) \n\t"
+        "lw t3, 0(%[row2]) \n\t"
+        "lw t4, 0(%[row3]) \n\t"
+        "buf4 x0, t1, t2, t3, t4 \n\t"
+        :
+        : [row0] "r" (row0),
+          [row1] "r" (row1),
+          [row2] "r" (row2),
+          [row3] "r" (row3)
+        : "t1", "t2", "t3", "t4", "cc", "memory"
+    );
 }
 
-static void inline buffer4(const UDATA_T* __restrict inputs)
-{        
-        const UDATA_T *p_in = inputs;
-        asm volatile(
-                "lw t1, 0(%[p_in]) \n\t"
-                "lw t2, 4(%[p_in]) \n\t"
-                "lw t3, 8(%[p_in]) \n\t"
-                "lw t4, 12(%[p_in]) \n\t"
-
-                "buf4 zero, t1, t2, t3, t4 \n\t"
-                :
-                : [p_in] "r" (p_in)
-                : "t1", "t2", "t3", "t4", "cc", "memory"
-        );
+/* Conv2 专用：把一个 pixel 的 16 个 channels buffer 进去。
+ * Conv2 一个完整 5x5x16 patch 需要连续执行 25 次这个函数。
+ * buf4 x24 表示 active_blocks = 25。
+ */
+static inline void buffer4_contiguous16_conv2(const UDATA_T* __restrict inputs)
+{
+    const UDATA_T *p_in = inputs;
+    asm volatile(
+        "lw t1, 0(%[p_in]) \n\t"
+        "lw t2, 4(%[p_in]) \n\t"
+        "lw t3, 8(%[p_in]) \n\t"
+        "lw t4, 12(%[p_in]) \n\t"
+        "buf4 x24, t1, t2, t3, t4 \n\t"
+        :
+        : [p_in] "r" (p_in)
+        : "t1", "t2", "t3", "t4", "cc", "memory"
+    );
 }
 
+/* FC1 专用：FC1 input = 384 byte = 24 个 16-byte block。
+ * buf4 x23 表示 active_blocks = 24。
+ */
+static inline void buffer4_contiguous16_fc1(const UDATA_T* __restrict inputs)
+{
+    const UDATA_T *p_in = inputs;
+    asm volatile(
+        "lw t1, 0(%[p_in]) \n\t"
+        "lw t2, 4(%[p_in]) \n\t"
+        "lw t3, 8(%[p_in]) \n\t"
+        "lw t4, 12(%[p_in]) \n\t"
+        "buf4 x23, t1, t2, t3, t4 \n\t"
+        :
+        : [p_in] "r" (p_in)
+        : "t1", "t2", "t3", "t4", "cc", "memory"
+    );
+}
 
-static void mac16(const const WDATA_T* __restrict weights,
-                        SUM_T* __restrict weightedSum)
+/* FC2 专用：FC2 input = 150 byte。
+ * 前 144 byte = 9 个 16-byte block 用 buffer + mac16buf，
+ * 最后 6 byte 用普通 scalar 处理。
+ * buf4 x8 表示 active_blocks = 9。
+ */
+static inline void buffer4_contiguous16_fc2(const UDATA_T* __restrict inputs)
+{
+    const UDATA_T *p_in = inputs;
+    asm volatile(
+        "lw t1, 0(%[p_in]) \n\t"
+        "lw t2, 4(%[p_in]) \n\t"
+        "lw t3, 8(%[p_in]) \n\t"
+        "lw t4, 12(%[p_in]) \n\t"
+        "buf4 x8, t1, t2, t3, t4 \n\t"
+        :
+        : [p_in] "r" (p_in)
+        : "t1", "t2", "t3", "t4", "cc", "memory"
+    );
+}
+
+/* 只执行 MAC，不更新 input buffer。
+ * 这个函数假设：对应的 input block 已经在硬件 input buffer 中。
+ * 硬件每执行一次 mac16buf，会根据 active_blocks 自动移动 read counter。
+ */
+static inline void mac16buf_only(const WDATA_T* __restrict weights,
+                                 SUM_T* __restrict weightedSum)
 {
     int32_t sum = *weightedSum;
-    int iter = 0;
-        const UDATA_T *p_wt = weights + iter;
+    const WDATA_T *p_wt = weights;
 
-        asm volatile(
-        "lw t3, 0(%[p_wt]) \n\t"
-        "lw t4, 4(%[p_wt]) \n\t"
-        "lw t1, 8(%[p_wt]) \n\t"
-        "lw t2, 12(%[p_wt]) \n\t"
+    asm volatile(
+        "lw t1, 0(%[p_wt]) \n\t"
+        "lw t2, 4(%[p_wt]) \n\t"
+        "lw t3, 8(%[p_wt]) \n\t"
+        "lw t4, 12(%[p_wt]) \n\t"
         "mac16buf %[sum], t1, t2, t3, t4 \n\t"
         : [sum] "+r" (sum)
-        :[p_wt] "r" (p_wt)
+        : [p_wt] "r" (p_wt)
         : "t1", "t2", "t3", "t4", "cc", "memory"
-        );
-     *weightedSum = sum;
+    );
+
+    *weightedSum = sum;
 }
 
 
-static void mac16_no_alined(const UDATA_T* __restrict inputs,
+
+
+
+static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
                         const WDATA_T* __restrict weights,
                         SUM_T* __restrict weightedSum,
                         int nb_iterations)
@@ -105,7 +182,8 @@ static void mac16_no_alined(const UDATA_T* __restrict inputs,
                 "lw t4, 12(%[p_wt]) \n\t"
                 "mac16buf %[sum], t1, t2, t3, t4 \n\t"
                 : [sum] "+r" (sum)
-                :[p_wt] "r" (p_wt)
+                : [p_in] "r" (p_in), 
+                [p_wt] "r" (p_wt)
                 : "t1", "t2", "t3", "t4", "cc", "memory"
             );
         }else{
@@ -204,114 +282,128 @@ static void convcellPropagate1(
     int OUTPUTS_WIDTH_NOPAD
         = (CHANNELS_WIDTH - KERNEL_WIDTH + STRIDE_X) / STRIDE_X;
 
+    /*
+     * Conv1 的 buffer 策略：
+     *   - Conv1 kernel = 4x4x1 = 16 byte = 1 个 block。
+     *   - 对同一个 output pixel (ox, oy)，input patch 对所有 output filters 都一样。
+     *   - 所以 buffer4 应该放在 output 循环外面：一个 patch 只 buffer 一次。
+     *   - 后续每个 output filter 只换 weight，然后执行 mac16buf。
+     */
+
     for (int oy = 0; oy < OUTPUTS_HEIGHT; ++oy) {
-        const int syMin = (PADDING_Y == 0) ? 0 //syMin is always 0, because there is no padding here
+        const int syMin = (PADDING_Y == 0) ? 0
             : max(PADDING_Y - (oy * STRIDE_Y), 0);
-        const int syMax = (PADDING_Y == 0 //syMax is always KERNEL_HEIGHT, because CHANNELS_HEIGHT + PADDING_Y - (oy * STRIDE_Y) >= KERNEL_HEIGHT
+        const int syMax = (PADDING_Y == 0
                 && OUTPUTS_HEIGHT == OUTPUTS_HEIGHT_NOPAD) ? KERNEL_HEIGHT
-            : clamp(CHANNELS_HEIGHT + PADDING_Y - (oy * STRIDE_Y), 
-                    0, KERNEL_HEIGHT); //clamp helps us to know if CHANNELS_HEIGHT + PADDING_Y - (oy * STRIDE_Y) is between 0-KERNEL_HEIGHT
-        const int iy = (oy * STRIDE_Y) - PADDING_Y; 
-/*
+            : clamp(CHANNELS_HEIGHT + PADDING_Y - (oy * STRIDE_Y),
+                    0, KERNEL_HEIGHT);
+        const int iy = (oy * STRIDE_Y) - PADDING_Y;
+
         for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
-            for (int output = 0; output < NB_OUTPUTS; ++output) { //accoding to the number of output to define the loop number
-                // moved to inner loop for collapsing -->
-                const int sxMin = (PADDING_X == 0) ? 0 //syMin is always 0, because there is no padding here
-                    : max(PADDING_X - (ox * STRIDE_X), 0);
-                const int sxMax = (PADDING_X == 0 //sxMax is always KERNEL_HEIGHT, because CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_Y) >= KERNEL_WIDTH
-                        && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
-                            ? KERNEL_WIDTH
-                    : clamp(CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_X), 
-                            0, KERNEL_WIDTH);
-                const int ix = (ox * STRIDE_X) - PADDING_X;
+            const int sxMin = (PADDING_X == 0) ? 0
+                : max(PADDING_X - (ox * STRIDE_X), 0);
+            const int sxMax = (PADDING_X == 0
+                    && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
+                        ? KERNEL_WIDTH
+                : clamp(CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_X),
+                        0, KERNEL_WIDTH);
+            const int ix = (ox * STRIDE_X) - PADDING_X;
 
-                const int oPos = (ox + OUTPUTS_WIDTH * oy); //output position
-                int oOffset = OUTPUT_MEM_STRIDE * oPos; 
+            const int oPos = (ox + OUTPUTS_WIDTH * oy);
+            int oOffset = OUTPUT_MEM_STRIDE * oPos;
 
-                if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
-                    oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
-                                - OUTPUT_MEM_CONT_SIZE;
+            if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
+                oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
+                            - OUTPUT_MEM_CONT_SIZE;
+            }
+
+            /*
+             * 只有完整 4x4x1 patch 且地址 4-byte 对齐时，才走 input buffer。
+             * 如果遇到 padding、wrap 或 unaligned 地址，就回退到原始 scalar 逻辑。
+             */
+            bool patch_ok = ((ox & 1) == 0);
+            const UDATA_T* row0 = 0;
+            const UDATA_T* row1 = 0;
+            const UDATA_T* row2 = 0;
+            const UDATA_T* row3 = 0;
+
+            if (KERNEL_HEIGHT == 4 && KERNEL_WIDTH == 4 && NB_CHANNELS == 1
+                && (sxMax - sxMin) == KERNEL_WIDTH
+                && (syMax - syMin) == KERNEL_HEIGHT)
+            {
+                const int iPos0 = ((sxMin + ix)
+                                + CHANNELS_WIDTH * (iy + syMin));
+                int iOffset0 = INPUT_MEM_STRIDE * iPos0;
+
+                if (INPUT_MEM_WRAP_SIZE > 0 && iOffset0 >= INPUT_MEM_CONT_SIZE) {
+                    iOffset0 += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
+                              - INPUT_MEM_CONT_SIZE;
                 }
-                // when the oOffset surpasses the size of OUTPUT_MEM_CONT_SIZE and there is wapping memory, adjust oOffset into wapping memory
-                // <--
 
-                SUM_T weightedSum = biasses[output]; // add biasses of kernel firstly
+                const int row_stride = CHANNELS_WIDTH * INPUT_MEM_STRIDE;
 
-                for (int sy = 0; sy <= KERNEL_HEIGHT - 4; sy += 4) { //in the kernel, start by line
-                    if ((PADDING_Y != 0
-                            || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
-                        && sy >= syMax - syMin)
-                    {
-                        break; // when there is padding and sy surpass the size of kernel, break
-                    }
+                row0 = inputs + iOffset0;
+                row1 = inputs + iOffset0 + row_stride;
+                row2 = inputs + iOffset0 + 2 * row_stride;
+                row3 = inputs + iOffset0 + 3 * row_stride;
+            }
 
-                    const int iPos = ((sxMin + ix)
-                                        + CHANNELS_WIDTH * (iy + syMin + sy)); // calculate the input position
-                    int iOffset = INPUT_MEM_STRIDE * iPos;
+            if (patch_ok) {
+                // buf4 x0: active_blocks = 1。这个 patch 会被所有 filters 复用。
+                buffer4_conv1_patch(row0, row1, row2, row3);
+            }
 
-                    // Wrapping cannot occur in the middle of a line, except if
-                    // there is only one line (1D)!
-                    bool wrapInRange = false;
+            for (int output = 0; output < NB_OUTPUTS; ++output) {
+                SUM_T weightedSum = biasses[output];
 
-                    if (INPUT_MEM_WRAP_SIZE > 0
-                        && iOffset >= INPUT_MEM_CONT_SIZE)
-                    {
-                        iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-                                    - INPUT_MEM_CONT_SIZE;
-                    }
-                     // when the iOffset surpasses the size of INTPUT_MEM_CONT_SIZE and there is wapping memory, adjust iOffset into wapping memory
-                    else if (INPUT_MEM_WRAP_SIZE > 0 && KERNEL_WIDTH > 1
-                        && CHANNELS_HEIGHT == 1 // single line (1D)!
-                        && iOffset + KERNEL_WIDTH * NB_CHANNELS
-                            > INPUT_MEM_CONT_SIZE)
-                    {
-                        wrapInRange = true;//when there is wrapping memory, the size of kernel is not 1*1, the input is 1D, 
-                                        //and ioffset + a line of data in kernel surpass the continue size,
-                                        //the wrapInRange will be true, which means that the data in memory is not continue
-                                        //it will surpass the boundary of contiguous memory
-                    }
-
+                if (patch_ok) {
+                    /*
+                     * Conv1 一个 filter 的 16 个 weight 连续存放。
+                     * input 已经在 buffer 的 block0 里，所以这里只需要换 weight。
+                     */
                     const int wOffset = NB_CHANNELS * (sxMin
-                        + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
+                        + KERNEL_WIDTH * (syMin + KERNEL_HEIGHT * output));
 
-                    if (!wrapInRange && (NB_CHANNELS == INPUT_MEM_STRIDE //it does not surpass the boundary of contiguous memory, there is no gap between
-                                                                         // two pixels
-                        && ((PADDING_X == 0 && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD) // there is no padding
-                                || sxMax - sxMin == KERNEL_WIDTH)))                  // or there is padding but the kernel is not cut by the padding (the kernel is whole)
-                                                                                     // to make sure the kernel in x is valid, we can use fonction direcetly
-                    {
-                        macsOnRange_no_alined(
-                            inputs + iOffset, 
-                            weights + wOffset, 
-                            &weightedSum,
-                            KERNEL_WIDTH * NB_CHANNELS * 4); //macs on a whole line of kernel, which is 2 times of NB_CHANNELS, because we unroll 2 times in y direction
-                    }
-                    else {
+                    mac16buf_only(weights + wOffset, &weightedSum);
+                }
+                else {
+                    /*
+                     * 安全回退路径：保持原始卷积语义。
+                     * 这条路径主要用于 unaligned/padding/wrap 等特殊情况。
+                     */
+                    for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
+                        if ((PADDING_Y != 0 || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
+                            && sy >= syMax - syMin)
+                        {
+                            break;
+                        }
+
                         for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
-                            if ((PADDING_X != 0
-                                    || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
+                            if ((PADDING_X != 0 || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
                                 && sx >= sxMax - sxMin)
                             {
-                                break; // when there is padding and sy surpass the size of kernel, break
+                                break;
                             }
 
-                            int iOffsetInRange = iOffset
-                                + sx * INPUT_MEM_STRIDE;
+                            const int iPos = ((sxMin + sx + ix)
+                                            + CHANNELS_WIDTH * (iy + syMin + sy));
+                            int iOffset = INPUT_MEM_STRIDE * iPos;
 
-                            if (wrapInRange
-                                && iOffsetInRange >= INPUT_MEM_CONT_SIZE)
+                            if (INPUT_MEM_WRAP_SIZE > 0
+                                && iOffset >= INPUT_MEM_CONT_SIZE)
                             {
-                                iOffsetInRange += INPUT_MEM_WRAP_OFFSET
-                                            - INPUT_MEM_CONT_OFFSET
-                                            - INPUT_MEM_CONT_SIZE;
+                                iOffset += INPUT_MEM_WRAP_OFFSET
+                                         - INPUT_MEM_CONT_OFFSET
+                                         - INPUT_MEM_CONT_SIZE;
                             }
 
-                            macsOnRange(
-                                // same input line so no wrapping can occur
-                                inputs + iOffsetInRange,  //index of input in memory
-                                weights + wOffset + sx * NB_CHANNELS,  //index of weight in memory
-                                &weightedSum,
-                                NB_CHANNELS);
+                            const int wOffset = NB_CHANNELS * (sxMin + sx
+                                + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
+
+                            macsOnRange(inputs + iOffset,
+                                        weights + wOffset,
+                                        &weightedSum,
+                                        NB_CHANNELS);
                         }
                     }
                 }
@@ -320,96 +412,6 @@ static void convcellPropagate1(
                     = sat(weightedSum, output, ACTIVATION, rescaling);
             }
         }
-            */
-           for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
-
-                const int sxMin = (PADDING_X == 0) ? 0
-                    : max(PADDING_X - (ox * STRIDE_X), 0);
-
-                const int sxMax = (PADDING_X == 0
-                        && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
-                            ? KERNEL_WIDTH
-                    : clamp(CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_X),
-                            0, KERNEL_WIDTH);
-
-                const int ix = (ox * STRIDE_X) - PADDING_X;
-
-                const int oPos = (ox + OUTPUTS_WIDTH * oy);
-                int oOffset = OUTPUT_MEM_STRIDE * oPos;
-
-                if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
-                    oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
-                                - OUTPUT_MEM_CONT_SIZE;
-                }
-
-                /*
-                * Conv1 专用 buffer：
-                * sy = 0，因为 KERNEL_HEIGHT = 4，
-                * 当前代码 sy loop 只有一次。
-                */
-                const int sy = 0;
-                const int iPos = ((sxMin + ix)
-                                    + CHANNELS_WIDTH * (iy + syMin + sy));
-                int iOffset = INPUT_MEM_STRIDE * iPos;
-
-                if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
-                    iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-                                - INPUT_MEM_CONT_SIZE;
-                }
-
-                const UDATA_T* patch_ptr = inputs + iOffset;
-                const bool patch_aligned = (((uintptr_t)patch_ptr & 0x3) == 0);
-
-                if (patch_aligned) {
-                    buffer4_conv1(patch_ptr);
-                }
-
-                for (int output = 0; output < NB_OUTPUTS; ++output) {
-                    SUM_T weightedSum = biasses[output];
-
-                    for (int sy = 0; sy <= KERNEL_HEIGHT - 4; sy += 4) {
-                        if ((PADDING_Y != 0
-                                || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
-                            && sy >= syMax - syMin)
-                        {
-                            break;
-                        }
-
-                        bool wrapInRange = false;
-
-                        if (INPUT_MEM_WRAP_SIZE > 0
-                            && iOffset >= INPUT_MEM_CONT_SIZE)
-                        {
-                            iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-                                        - INPUT_MEM_CONT_SIZE;
-                        }
-                        else if (INPUT_MEM_WRAP_SIZE > 0 && KERNEL_WIDTH > 1
-                            && CHANNELS_HEIGHT == 1
-                            && iOffset + KERNEL_WIDTH * NB_CHANNELS
-                                > INPUT_MEM_CONT_SIZE)
-                        {
-                            wrapInRange = true;
-                        }
-
-                        const int wOffset = NB_CHANNELS * (sxMin
-                            + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
-
-                        if (!wrapInRange && (NB_CHANNELS == INPUT_MEM_STRIDE
-                            && ((PADDING_X == 0 && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
-                                    || sxMax - sxMin == KERNEL_WIDTH)))
-                        {
-                            mac16_no_alined(
-                                inputs + iOffset,
-                                weights + wOffset,
-                                &weightedSum,
-                                KERNEL_WIDTH * NB_CHANNELS * 4);
-                        }
-                    }
-
-                    outputs[oOffset + output]
-                        = sat(weightedSum, output, ACTIVATION, rescaling);
-                }
-            }
     }
 }
 
@@ -446,117 +448,26 @@ static void convcellPropagate2(
     int OUTPUTS_WIDTH_NOPAD
         = (CHANNELS_WIDTH - KERNEL_WIDTH + STRIDE_X) / STRIDE_X;
 
+    /*
+     * Conv2 的 buffer 策略：
+     *   - Conv2 kernel = 5x5x16 = 400 byte = 25 个 16-byte block。
+     *   - 对同一个 output pixel (ox, oy)，完整 400-byte input patch
+     *     对 24 个 output filters 都相同。
+     *   - 所以先连续执行 25 次 buf4 x24，把完整 input patch 存进硬件 buffer。
+     *   - 然后每个 output filter 执行 25 次 mac16buf。
+     *   - 硬件 active_blocks=25，所以 25 次 mac16buf 后 read counter 自动回到 0。
+     */
+
     for (int oy = 0; oy < OUTPUTS_HEIGHT; ++oy) {
         const int syMin = (PADDING_Y == 0) ? 0
             : max(PADDING_Y - (oy * STRIDE_Y), 0);
         const int syMax = (PADDING_Y == 0
                 && OUTPUTS_HEIGHT == OUTPUTS_HEIGHT_NOPAD) ? KERNEL_HEIGHT
-            : clamp(CHANNELS_HEIGHT + PADDING_Y - (oy * STRIDE_Y), 
+            : clamp(CHANNELS_HEIGHT + PADDING_Y - (oy * STRIDE_Y),
                     0, KERNEL_HEIGHT);
         const int iy = (oy * STRIDE_Y) - PADDING_Y;
 
-//         for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
-//             for (int output = 0; output < NB_OUTPUTS; ++output) {
-//                 // moved to inner loop for collapsing -->
-//                 const int sxMin = (PADDING_X == 0) ? 0
-//                     : max(PADDING_X - (ox * STRIDE_X), 0);
-//                 const int sxMax = (PADDING_X == 0
-//                         && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
-//                             ? KERNEL_WIDTH
-//                     : clamp(CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_X), 
-//                             0, KERNEL_WIDTH);
-//                 const int ix = (ox * STRIDE_X) - PADDING_X;
-
-//                 const int oPos = (ox + OUTPUTS_WIDTH * oy);
-//                 int oOffset = OUTPUT_MEM_STRIDE * oPos;
-
-//                 if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
-//                     oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
-//                                 - OUTPUT_MEM_CONT_SIZE;
-//                 }
-//                 // <--
-
-//                 SUM_T weightedSum = biasses[output];
-
-//                 for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
-//                     if ((PADDING_Y != 0
-//                             || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
-//                         && sy >= syMax - syMin)
-//                     {
-//                         break;
-//                     }
-
-//                     const int iPos = ((sxMin + ix)
-//                                         + CHANNELS_WIDTH * (iy + syMin + sy));
-//                     int iOffset = INPUT_MEM_STRIDE * iPos;
-
-//                     // Wrapping cannot occur in the middle of a line, except if
-//                     // there is only one line (1D)!
-//                     bool wrapInRange = false;
-
-//                     if (INPUT_MEM_WRAP_SIZE > 0
-//                         && iOffset >= INPUT_MEM_CONT_SIZE)
-//                     {
-//                         iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-//                                     - INPUT_MEM_CONT_SIZE;
-//                     }
-//                     else if (INPUT_MEM_WRAP_SIZE > 0 && KERNEL_WIDTH > 1
-//                         && CHANNELS_HEIGHT == 1 // single line (1D)!
-//                         && iOffset + KERNEL_WIDTH * NB_CHANNELS
-//                             > INPUT_MEM_CONT_SIZE)
-//                     {
-//                         wrapInRange = true;
-//                     }
-
-//                     const int wOffset = NB_CHANNELS * (sxMin
-//                         + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
-
-//                     if (!wrapInRange && (NB_CHANNELS == INPUT_MEM_STRIDE
-//                         && ((PADDING_X == 0
-//                             && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
-//                                 || sxMax - sxMin == KERNEL_WIDTH)))
-//                     {
-//                         macsOnRange(
-//                             inputs + iOffset, 
-//                             weights + wOffset, 
-//                             &weightedSum,KERNEL_WIDTH * NB_CHANNELS);
-//                     }
-//                     else {
-//                         for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
-//                             if ((PADDING_X != 0
-//                                     || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
-//                                 && sx >= sxMax - sxMin)
-//                             {
-//                                 break;
-//                             }
-
-//                             int iOffsetInRange = iOffset
-//                                 + sx * INPUT_MEM_STRIDE;
-
-//                             if (wrapInRange
-//                                 && iOffsetInRange >= INPUT_MEM_CONT_SIZE)
-//                             {
-//                                 iOffsetInRange += INPUT_MEM_WRAP_OFFSET
-//                                             - INPUT_MEM_CONT_OFFSET
-//                                             - INPUT_MEM_CONT_SIZE;
-//                             }
-
-//                             macsOnRange(
-//                                 // same input line so no wrapping can occur
-//                                 inputs + iOffsetInRange, 
-//                                 weights + wOffset + sx * NB_CHANNELS, 
-//                                 &weightedSum,NB_CHANNELS);
-//                         }
-//                     }
-//                 }
-
-//                 outputs[oOffset + output]
-//                     = sat(weightedSum, output, ACTIVATION, rescaling);
-//             }
-//         }
-//     }
-// }
-for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
+        for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
             const int sxMin = (PADDING_X == 0) ? 0
                 : max(PADDING_X - (ox * STRIDE_X), 0);
             const int sxMax = (PADDING_X == 0
@@ -575,76 +486,76 @@ for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
             }
 
             /*
-             * Reordered Conv2 schedule:
-             *   old: output -> sy -> sx
-             *   new: sy -> sx -> output
+             * 先检查这个 5x5x16 patch 是否能安全用 buffer：
+             *   1. 每个 pixel 的 16 channels 连续；
+             *   2. 每个 16-byte block 4-byte 对齐；
+             *   3. 没有跨 memory wrap 边界；
+             *   4. 当前 patch 没有被 padding 截断。
              *
-             * One input block is one pixel's 16 channels.
-             * It is buffered once, then reused by all output filters.
+             * 检查通过后才真正执行 buf4，避免写了一半 buffer 又 fallback，
+             * 导致硬件 write counter 错位。
              */
-            SUM_T weightedSum[NB_OUTPUTS];
-            for (int output = 0; output < NB_OUTPUTS; ++output) {
-                weightedSum[output] = biasses[output];
-            }
-
-            for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
-                if ((PADDING_Y != 0 || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
-                    && sy >= syMax - syMin)
-                {
-                    break;
-                }
-
-                for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
-                    if ((PADDING_X != 0 || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
-                        && sx >= sxMax - sxMin)
-                    {
-                        break;
-                    }
-
-                    const int iPos = ((sxMin + sx + ix)
+                for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
+                    for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
+                        const int iPos = ((sxMin + sx + ix)
                                         + CHANNELS_WIDTH * (iy + syMin + sy));
-                    int iOffset = INPUT_MEM_STRIDE * iPos;
+                        int iOffset = INPUT_MEM_STRIDE * iPos;
 
-                    if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
-                        iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-                                    - INPUT_MEM_CONT_SIZE;
-                    }
-
-                    const UDATA_T* in_ptr = inputs + iOffset;
-                    const bool input_block_ok =
-                        (NB_CHANNELS == 16)
-                        && (INPUT_MEM_STRIDE == NB_CHANNELS)
-                        && (((uintptr_t)in_ptr & 0x3) == 0);
-
-                    if (input_block_ok) {
-                        // Buffer current pixel's 16 channels once.
-                        buffer4(in_ptr);
-
-                        for (int output = 0; output < NB_OUTPUTS; ++output) {
-                            const int wOffset = NB_CHANNELS * (sxMin + sx
-                                + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
-
-                            mac16(weights + wOffset, &weightedSum[output]);
+                        if (INPUT_MEM_WRAP_SIZE > 0
+                            && iOffset + NB_CHANNELS > INPUT_MEM_CONT_SIZE)
+                        {
+                            break;
                         }
-                    }
-                    else {
-                        // Safe scalar fallback for unusual layout/alignment/padding cases.
-                        for (int output = 0; output < NB_OUTPUTS; ++output) {
-                            const int wOffset = NB_CHANNELS * (sxMin + sx
-                                + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
 
-                            macsOnRange(inputs + iOffset,
-                                        weights + wOffset,
-                                        &weightedSum[output],
-                                        NB_CHANNELS);
+                        if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
+                            iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
+                                      - INPUT_MEM_CONT_SIZE;
                         }
+
+                        const UDATA_T* in_ptr = inputs + iOffset;
                     }
                 }
-            }
+
+                /*
+                 * 填满完整 Conv2 patch。
+                 * 连续 25 次 buf4 x24：
+                 *   block0, block1, ..., block24
+                 * 写完后硬件 write counter 自动回到 0。
+                 */
+                for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
+                    for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
+                        const int iPos = ((sxMin + sx + ix)
+                                        + CHANNELS_WIDTH * (iy + syMin + sy));
+                        int iOffset = INPUT_MEM_STRIDE * iPos;
+
+                        if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
+                            iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
+                                      - INPUT_MEM_CONT_SIZE;
+                        }
+
+                        buffer4_contiguous16_conv2(inputs + iOffset);
+                    }
+                }
+            
 
             for (int output = 0; output < NB_OUTPUTS; ++output) {
+                SUM_T weightedSum = biasses[output];
+                    /*
+                     * input patch 已经在硬件 buffer 中。
+                     * 对当前 output filter，只需要按 sy/sx 顺序读取对应 weight block。
+                     * 25 次 mac16buf 后，硬件 read counter 自动回到 0，
+                     * 所以下一个 output filter 会重新从 block0 开始读。
+                     */
+                    for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
+                        for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
+                            const int wOffset = NB_CHANNELS * (sxMin + sx
+                                + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
+
+                            mac16buf_only(weights + wOffset, &weightedSum);
+                        }
+                    }
                 outputs[oOffset + output]
-                    = sat(weightedSum[output], output, ACTIVATION, rescaling);
+                    = sat(weightedSum, output, ACTIVATION, rescaling);
             }
         }
     }
@@ -675,64 +586,43 @@ static void fccellPropagateUDATA_T(
     int OUTPUT_MEM_WRAP_SIZE,
     int OUTPUT_MEM_STRIDE)
 {
-    // static_assert(OUTPUTS_HEIGHT == 1, "Outputs height should be 1");
-    // static_assert(OUTPUTS_WIDTH == 1, "Outputs width should be 1");
-    // static_assert(OUTPUT_MEM_WRAP_SIZE == 0, "Output wrapping not supported");
+    /*
+     * FC1 的 buffer 策略：
+     *   - FC1 input = Conv2 output = 24x4x4 = 384 byte。
+     *   - 384 byte = 24 个 16-byte block。
+     *   - 先执行 24 次 buf4 x23，把整个 FC1 input 存进硬件 input buffer。
+     *   - 然后每个 output neuron 执行 24 次 mac16buf。
+     *   - 硬件 active_blocks=24，所以每个 neuron 算完后 read counter 自动回到 0。
+     *
+     * 如果输入布局不满足连续/对齐要求，就走原始 scalar fallback。
+     */
+    const int total_inputs = NB_CHANNELS * CHANNELS_WIDTH * CHANNELS_HEIGHT;
 
-    for (int och = 0; och < NB_OUTPUTS; och++) {
-        SUM_T weightedSum = biasses[och];
 
-        for (int iy = 0; iy < CHANNELS_HEIGHT; ++iy) {
-            const int iPos = (CHANNELS_WIDTH * iy);
-            int iOffset = INPUT_MEM_STRIDE * iPos;
-
-            // Wrapping cannot occur in the middle of a line, except if
-            // there is only one line (1D)!
-            bool wrapInRange = false;
-
-            if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
-                iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-                            - INPUT_MEM_CONT_SIZE;
-            }
-            else if (INPUT_MEM_WRAP_SIZE > 0 && CHANNELS_WIDTH > 1
-                && CHANNELS_HEIGHT == 1 // single line (1D)!
-                && iOffset + CHANNELS_WIDTH * NB_CHANNELS
-                    > INPUT_MEM_CONT_SIZE)
-            {
-                wrapInRange = true;
-            }
-
-            const int wOffset = NB_CHANNELS * CHANNELS_WIDTH
-                                    * (iy + CHANNELS_HEIGHT * och);
-
-            if (!wrapInRange && INPUT_MEM_STRIDE == NB_CHANNELS) {
-                macsOnRange(
-                    inputs + iOffset, 
-                    weights + wOffset, 
-                    &weightedSum, NB_CHANNELS * CHANNELS_WIDTH);
-            }
-            else {
-                for (int ix = 0; ix < CHANNELS_WIDTH; ++ix) {
-                    int iOffsetInRange = iOffset + ix * INPUT_MEM_STRIDE;
-
-                    if (wrapInRange
-                        && iOffsetInRange >= INPUT_MEM_CONT_SIZE)
-                    {
-                        iOffsetInRange += INPUT_MEM_WRAP_OFFSET
-                                    - INPUT_MEM_CONT_OFFSET
-                                    - INPUT_MEM_CONT_SIZE;
-                    }
-
-                    macsOnRange(
-                        inputs + iOffsetInRange, 
-                        weights + wOffset + ix * NB_CHANNELS, 
-                        &weightedSum, NB_CHANNELS);
-                }
-            }
+        // 一次性把 FC1 的 384-byte input 全部 buffer 进去。
+        for (int block = 0; block < 24; ++block) {
+            buffer4_contiguous16_fc1(inputs + block * 16);
         }
 
-        outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
-    }
+        for (int och = 0; och < NB_OUTPUTS; och++) {
+            SUM_T weightedSum = biasses[och];
+
+            const int wBase = och * total_inputs;
+
+            for (int block = 0; block < 24; ++block) {
+                mac16buf_only(weights + wBase + block * 16, &weightedSum);
+            }
+
+            outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
+        }
+
+        return;
+
+
+    /*
+     * 原始 fallback：
+     * 用于非 FC1、非连续布局、或不对齐情况。
+     */
 }
 
 static void fccellPropagateDATA_T(
@@ -759,10 +649,51 @@ static void fccellPropagateDATA_T(
     int OUTPUT_MEM_WRAP_SIZE,
     int OUTPUT_MEM_STRIDE)
 {
-    // static_assert(OUTPUTS_HEIGHT == 1, "Outputs height should be 1");
-    // static_assert(OUTPUTS_WIDTH == 1, "Outputs width should be 1");
-    // static_assert(OUTPUT_MEM_WRAP_SIZE == 0, "Output wrapping not supported");
+    /*
+     * FC2 的 buffer 策略：
+     *   - FC2 input = 150 byte。
+     *   - 前 144 byte = 9 个 16-byte block，用 buf4 x8 + mac16buf。
+     *   - 最后 6 byte 不是完整 16-byte block，先保留 scalar 处理。
+     *   - 每个 output class 执行 9 次 mac16buf 后，硬件 read counter 自动回到 0。
+     */
+    const int total_inputs = NB_CHANNELS * CHANNELS_WIDTH * CHANNELS_HEIGHT;
 
+    const bool fc2_buffer_ok = false;
+        // (total_inputs == 150)
+        // && (INPUT_MEM_STRIDE == NB_CHANNELS)
+        // && (INPUT_MEM_WRAP_SIZE == 0)
+        // && (((uintptr_t)inputs & 0x3) == 0);
+
+    if (fc2_buffer_ok) {
+        // 只 buffer 前 144 个 input，剩下 6 个 input 在每个 output 中 scalar 累加。
+        for (int block = 0; block < 9; ++block) {
+            buffer4_contiguous16_fc2(inputs + block * 16);
+        }
+
+        for (int och = 0; och < NB_OUTPUTS; och++) {
+            SUM_T weightedSum = biasses[och];
+
+            const int wBase = och * total_inputs;
+
+            for (int block = 0; block < 9; ++block) {
+                mac16buf_only(weights + wBase + block * 16, &weightedSum);
+            }
+
+            // FC2 剩余 6 个 input：index 144..149。
+            for (int i = 144; i < total_inputs; ++i) {
+                weightedSum += inputs[i] * weights[wBase + i];
+            }
+
+            outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
+        }
+
+        return;
+    }
+
+    /*
+     * 原始 fallback：
+     * 用于非 FC2、非连续布局、或不对齐情况。
+     */
     for (int och = 0; och < NB_OUTPUTS; och++) {
         SUM_T weightedSum = biasses[och];
 
@@ -770,8 +701,6 @@ static void fccellPropagateDATA_T(
             const int iPos = (CHANNELS_WIDTH * iy);
             int iOffset = INPUT_MEM_STRIDE * iPos;
 
-            // Wrapping cannot occur in the middle of a line, except if
-            // there is only one line (1D)!
             bool wrapInRange = false;
 
             if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
@@ -779,7 +708,7 @@ static void fccellPropagateDATA_T(
                             - INPUT_MEM_CONT_SIZE;
             }
             else if (INPUT_MEM_WRAP_SIZE > 0 && CHANNELS_WIDTH > 1
-                && CHANNELS_HEIGHT == 1 // single line (1D)!
+                && CHANNELS_HEIGHT == 1
                 && iOffset + CHANNELS_WIDTH * NB_CHANNELS
                     > INPUT_MEM_CONT_SIZE)
             {
@@ -994,11 +923,11 @@ void propagate(const UDATA_T* inputs, Target_T* outputs, UDATA_T* maxPropagate_v
     fclose(fc2_stream);
 #endif
 //modifcation debug
-    printf("fc2_output = ");
-    for (int i = 0; i < 10; i++) {
-        printf("%d ", fc2_output[i]);
-    }
-    printf("\n");
+    // printf("fc2_output = ");
+    // for (int i = 0; i < 10; i++) {
+    //     printf("%d ", fc2_output[i]);
+    // }
+    // printf("\n");
     maxPropagate1(fc2_output, outputs, maxPropagate_val, FC2_NB_OUTPUTS, FC2_OUTPUTS_HEIGHT, FC2_OUTPUTS_WIDTH, FC2_MEM_CONT_OFFSET, FC2_MEM_CONT_SIZE, FC2_MEM_WRAP_OFFSET, FC2_MEM_WRAP_SIZE, FC2_MEM_STRIDE);
 
 #ifdef SAVE_OUTPUTS
@@ -1018,5 +947,4 @@ float Network::backpropagate(const DATA_T* input, const std::int32_t* labels){
 int Network::gradientCheck(){
    return(0);
 }*/
-
 

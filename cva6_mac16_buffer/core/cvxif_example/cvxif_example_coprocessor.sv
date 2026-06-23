@@ -94,7 +94,7 @@ module cvxif_example_coprocessor
 
 
   assign instr_push = x_issue_resp_o.accept ? 1 : 0;
-  assign instr_pop = (x_commit_i.x_commit_kill && x_commit_valid_i) || x_result_valid_o;
+  assign instr_pop = (x_commit_i.x_commit_kill && x_commit_valid_i) || (x_result_valid_o && x_result_ready_i);
   assign x_issue_ready_q = ~fifo_full; // if something is in the fifo, the instruction is being processed
                                        // so we can't receive anything else
   assign req_i.req = x_issue_req_i;
@@ -142,35 +142,67 @@ module cvxif_example_coprocessor
       .overflow_o()
   );
 
-// ==========================================
-  // 前面保留你原有的 instr_decoder_i 和 fifo_commit_i 例化...
-  // ==========================================
+  localparam int unsigned  INPUT_BUF_WORDS = 100;  
 
-  // 从这里开始替换掉原来的 counter 和加法逻辑！
+  logic [31:0] input_buffer [0:INPUT_BUF_WORDS-1];
 
-  // 定义内部特征图 Buffer (4个槽位，每个32位)
-  logic [31:0] input_buffer [0:3];
+  logic [4:0] wr_block_cnt_q;
+  logic [4:0] rd_block_cnt_q;
+  logic [4:0] active_blocks_q;
+
+  logic [4:0] buf_active_blocks;
+  logic [4:0] wr_block_sel;
+  logic [6:0] wr_base;
+  logic [6:0] rd_base;
+
+  assign buf_active_blocks = req_o.req.instr[11:7] + 5'd1;
   
-  logic is_buf4_ex;
-  logic is_mac16buf_ex;
-  
-  // 在执行阶段，通过 Opcode 识别从 FIFO 弹出的指令具体是谁
-  // (假设 buf4 是 0101011, mac16buf 是 1011011，请根据你的实际 Opcode 修改)
+  assign wr_base = {wr_block_sel, 2'b00};
+  assign rd_base = {rd_block_cnt_q, 2'b00};
+
+
   assign is_buf4_ex     = (req_o.req.instr[6:0] == 7'b0101011);
   assign is_mac16buf_ex = (req_o.req.instr[6:0] == 7'b0001011);
 
   // FIFO 非空且没被杀掉时，结果有效
   assign x_result_valid_o = ~fifo_empty && ~x_commit_i.x_commit_kill;
 
+  assign wr_block_sel = (is_buf4_ex && (buf_active_blocks != active_blocks_q)) ? 5'd0 : wr_block_cnt_q;
   // Buffer 写入状态机 (响应 buf4)
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      for (int i = 0; i < 4; i++) input_buffer[i] <= '0;
-    end else if (x_result_valid_o && is_buf4_ex) begin
-      input_buffer[0] <= req_o.req.rs[0]; 
-      input_buffer[1] <= req_o.req.rs[1]; 
-      input_buffer[2] <= req_o.req.rs[3]; 
-      input_buffer[3] <= req_o.req.rs[4]; 
+      active_blocks_q <= 5'd1;
+      wr_block_cnt_q <= 5'd0;
+      rd_block_cnt_q <= 5'd0;
+
+      for (int i = 0; i < INPUT_BUF_WORDS; i++) begin
+        input_buffer[i] <= '0;
+      end
+    end else if (x_result_valid_o && x_result_ready_i) begin
+      if(is_buf4_ex) begin
+        active_blocks_q <= buf_active_blocks;
+
+        input_buffer[wr_base + 0] <= req_o.req.rs[0]; 
+        input_buffer[wr_base + 1] <= req_o.req.rs[1]; 
+        input_buffer[wr_base + 2] <= req_o.req.rs[3]; 
+        input_buffer[wr_base + 3] <= req_o.req.rs[4]; 
+
+        if (wr_block_sel == (buf_active_blocks - 5'd1)) begin
+          wr_block_cnt_q <= 5'd0;
+        end else begin
+          wr_block_cnt_q <= wr_block_sel + 5'd1;
+        end
+
+        if (buf_active_blocks != active_blocks_q) begin
+          rd_block_cnt_q <= 5'd0; // Reset read block counter if active blocks change
+        end
+      end else if (is_mac16buf_ex) begin
+        if (rd_block_cnt_q == (active_blocks_q - 5'd1)) begin
+          rd_block_cnt_q <= 5'd0;
+        end else begin
+          rd_block_cnt_q <= rd_block_cnt_q + 5'd1;
+        end
+      end
     end
   end
 
@@ -187,10 +219,10 @@ module cvxif_example_coprocessor
       weight3 = $signed(req_o.req.rs[3]); 
       weight4 = $signed(req_o.req.rs[4]); 
 
-      input1 = $signed(input_buffer[0]);
-      input2 = $signed(input_buffer[1]);
-      input3 = $signed(input_buffer[2]);
-      input4 = $signed(input_buffer[3]);
+      input1 = $signed(input_buffer[rd_base + 0]);
+      input2 = $signed(input_buffer[rd_base + 1]);
+      input3 = $signed(input_buffer[rd_base + 2]);
+      input4 = $signed(input_buffer[rd_base + 3]);
 
       p0 = $signed({1'b0, input1[7:0]}) * $signed(weight1[7:0]);
       p1 = $signed({1'b0, input1[15:8]}) * $signed(weight1[15:8]);
