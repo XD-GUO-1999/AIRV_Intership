@@ -224,6 +224,40 @@ static void macsOnRange(const UDATA_T* __restrict inputs,
     }
 }
 
+static inline void conv1_patch_unrolled_scalar(
+    const UDATA_T* __restrict row0,
+    const UDATA_T* __restrict row1,
+    const UDATA_T* __restrict row2,
+    const UDATA_T* __restrict row3,
+    const WDATA_T* __restrict weights,
+    SUM_T* __restrict weightedSum)
+{
+    int32_t sum = *weightedSum;
+
+    sum += (int32_t)row0[0] * (int32_t)weights[0];
+    sum += (int32_t)row0[1] * (int32_t)weights[1];
+    sum += (int32_t)row0[2] * (int32_t)weights[2];
+    sum += (int32_t)row0[3] * (int32_t)weights[3];
+
+    sum += (int32_t)row1[0] * (int32_t)weights[4];
+    sum += (int32_t)row1[1] * (int32_t)weights[5];
+    sum += (int32_t)row1[2] * (int32_t)weights[6];
+    sum += (int32_t)row1[3] * (int32_t)weights[7];
+
+    sum += (int32_t)row2[0] * (int32_t)weights[8];
+    sum += (int32_t)row2[1] * (int32_t)weights[9];
+    sum += (int32_t)row2[2] * (int32_t)weights[10];
+    sum += (int32_t)row2[3] * (int32_t)weights[11];
+
+    sum += (int32_t)row3[0] * (int32_t)weights[12];
+    sum += (int32_t)row3[1] * (int32_t)weights[13];
+    sum += (int32_t)row3[2] * (int32_t)weights[14];
+    sum += (int32_t)row3[3] * (int32_t)weights[15];
+
+    *weightedSum = sum;
+}
+
+
 static UDATA_T saturate(SUM_T value, uint32_t sat) {
     return clamp(value, (SUM_T)(0), ((SUM_T)(1) << sat) - 1);
 }
@@ -367,45 +401,52 @@ static void convcellPropagate1(
                     mac16buf_only(weights + wOffset, &weightedSum);
                 }
                 else {
+                    const int wOffset = NB_CHANNELS * (sxMin
+                        + KERNEL_WIDTH * (syMin + KERNEL_HEIGHT * output));
+
+                    conv1_patch_unrolled_scalar(
+                        row0, row1, row2, row3,
+                        weights + wOffset, weightedSum);
+                
                     /*
                      * 安全回退路径：保持原始卷积语义。
                      * 这条路径主要用于 unaligned/padding/wrap 等特殊情况。
                      */
-                    for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
-                        if ((PADDING_Y != 0 || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
-                            && sy >= syMax - syMin)
-                        {
-                            break;
-                        }
+                    // for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
+                    //     if ((PADDING_Y != 0 || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
+                    //         && sy >= syMax - syMin)
+                    //     {
+                    //         break;
+                    //     }
 
-                        for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
-                            if ((PADDING_X != 0 || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
-                                && sx >= sxMax - sxMin)
-                            {
-                                break;
-                            }
+                    //     for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
+                    //         if ((PADDING_X != 0 || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
+                    //             && sx >= sxMax - sxMin)
+                    //         {
+                    //             break;
+                    //         }
 
-                            const int iPos = ((sxMin + sx + ix)
-                                            + CHANNELS_WIDTH * (iy + syMin + sy));
-                            int iOffset = INPUT_MEM_STRIDE * iPos;
+                    //         const int iPos = ((sxMin + sx + ix)
+                    //                         + CHANNELS_WIDTH * (iy + syMin + sy));
+                    //         int iOffset = INPUT_MEM_STRIDE * iPos;
 
-                            if (INPUT_MEM_WRAP_SIZE > 0
-                                && iOffset >= INPUT_MEM_CONT_SIZE)
-                            {
-                                iOffset += INPUT_MEM_WRAP_OFFSET
-                                         - INPUT_MEM_CONT_OFFSET
-                                         - INPUT_MEM_CONT_SIZE;
-                            }
+                    //         if (INPUT_MEM_WRAP_SIZE > 0
+                    //             && iOffset >= INPUT_MEM_CONT_SIZE)
+                    //         {
+                    //             iOffset += INPUT_MEM_WRAP_OFFSET
+                    //                      - INPUT_MEM_CONT_OFFSET
+                    //                      - INPUT_MEM_CONT_SIZE;
+                    //         }
 
-                            const int wOffset = NB_CHANNELS * (sxMin + sx
-                                + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
+                    //         const int wOffset = NB_CHANNELS * (sxMin + sx
+                    //             + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
 
-                            macsOnRange(inputs + iOffset,
-                                        weights + wOffset,
-                                        &weightedSum,
-                                        NB_CHANNELS);
-                        }
-                    }
+                    //         macsOnRange(inputs + iOffset,
+                    //                     weights + wOffset,
+                    //                     &weightedSum,
+                    //                     NB_CHANNELS);
+                    //     }
+                    // }
                 }
 
                 outputs[oOffset + output]
@@ -617,12 +658,6 @@ static void fccellPropagateUDATA_T(
         }
 
         return;
-
-
-    /*
-     * 原始 fallback：
-     * 用于非 FC1、非连续布局、或不对齐情况。
-     */
 }
 
 static void fccellPropagateDATA_T(
