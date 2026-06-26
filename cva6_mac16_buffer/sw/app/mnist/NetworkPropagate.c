@@ -28,6 +28,74 @@ static int clamp(int v, int lo, int hi) {
     }
 }
 
+static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
+                        const WDATA_T* __restrict weights,
+                        SUM_T* __restrict weightedSum,
+                        int nb_iterations)
+{
+    int32_t sum = *weightedSum;
+    int iter = 0;
+
+    for (; iter <= nb_iterations - 16; iter += 16) {
+        
+        sum += inputs[iter + 0] * weights[iter + 0];
+        sum += inputs[iter + 1] * weights[iter + 1];
+        sum += inputs[iter + 2] * weights[iter + 2];
+        sum += inputs[iter + 3] * weights[iter + 3];
+        sum += inputs[iter + 24] * weights[iter + 4];
+        sum += inputs[iter + 25] * weights[iter + 5];
+        sum += inputs[iter + 26] * weights[iter + 6];
+        sum += inputs[iter + 27] * weights[iter + 7];
+        sum += inputs[iter + 48] * weights[iter + 8];
+        sum += inputs[iter + 49] * weights[iter + 9];
+        sum += inputs[iter + 50] * weights[iter + 10];
+        sum += inputs[iter + 51] * weights[iter + 11];
+        sum += inputs[iter + 72] * weights[iter + 12];
+        sum += inputs[iter + 73] * weights[iter + 13];
+        sum += inputs[iter + 74] * weights[iter + 14];
+        sum += inputs[iter + 75] * weights[iter + 15];
+    }
+
+    for (; iter < nb_iterations; ++iter)
+        {
+            sum += inputs[iter] * weights[iter];
+        }
+
+     *weightedSum = sum;
+}
+static void macsOnRange_no_alined_for_fc2(const UDATA_T* __restrict inputs,
+                        const WDATA_T* __restrict weights,
+                        SUM_T* __restrict weightedSum,
+                        int nb_iterations)
+{
+    int32_t sum = *weightedSum;
+    int iter = 0;
+
+        for (; iter <= nb_iterations - 16; iter += 16) {
+            sum += inputs[iter + 0] * weights[iter + 0];
+            sum += inputs[iter + 1] * weights[iter + 1];
+            sum += inputs[iter + 2] * weights[iter + 2];
+            sum += inputs[iter + 3] * weights[iter + 3];
+            sum += inputs[iter + 4] * weights[iter + 4];
+            sum += inputs[iter + 5] * weights[iter + 5];
+            sum += inputs[iter + 6] * weights[iter + 6];
+            sum += inputs[iter + 7] * weights[iter + 7];
+            sum += inputs[iter + 8] * weights[iter + 8];
+            sum += inputs[iter + 9] * weights[iter + 9];
+            sum += inputs[iter + 10] * weights[iter + 10];
+            sum += inputs[iter + 11] * weights[iter + 11];
+            sum += inputs[iter + 12] * weights[iter + 12];
+            sum += inputs[iter + 13] * weights[iter + 13];
+            sum += inputs[iter + 14] * weights[iter + 14];
+            sum += inputs[iter + 15] * weights[iter + 15];
+            }
+            for (; iter < nb_iterations; ++iter)
+            {
+                sum += inputs[iter] * weights[iter];
+            }     
+     *weightedSum = sum;
+}
+
 /*
  * ============================================================
  * 统一 input buffer 辅助函数
@@ -155,65 +223,6 @@ static inline void mac16buf_only(const WDATA_T* __restrict weights,
     *weightedSum = sum;
 }
 
-
-
-
-
-static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
-                        const WDATA_T* __restrict weights,
-                        SUM_T* __restrict weightedSum,
-                        int nb_iterations)
-{
-    int32_t sum = *weightedSum;
-    int iter = 0;
-
-    for (; iter <= nb_iterations - 16; iter += 16) {
-        const UDATA_T *p_in = inputs + iter;
-        const UDATA_T *p_wt = weights + iter;
-
-        uintptr_t addr_in = (uintptr_t)p_in;
-        uintptr_t addr_wt = (uintptr_t)p_wt;
-        
-        if((addr_in & 0x3) == 0){
-            asm volatile(
-                "lw t1, 0(%[p_wt]) \n\t"
-                "lw t2, 4(%[p_wt]) \n\t"
-                "lw t3, 8(%[p_wt]) \n\t"
-                "lw t4, 12(%[p_wt]) \n\t"
-                "mac16buf %[sum], t1, t2, t3, t4 \n\t"
-                : [sum] "+r" (sum)
-                : [p_in] "r" (p_in), 
-                [p_wt] "r" (p_wt)
-                : "t1", "t2", "t3", "t4", "cc", "memory"
-            );
-        }else{
-            sum += inputs[iter + 0] * weights[iter + 0];
-            sum += inputs[iter + 1] * weights[iter + 1];
-            sum += inputs[iter + 2] * weights[iter + 2];
-            sum += inputs[iter + 3] * weights[iter + 3];
-            sum += inputs[iter + 24] * weights[iter + 4];
-            sum += inputs[iter + 25] * weights[iter + 5];
-            sum += inputs[iter + 26] * weights[iter + 6];
-            sum += inputs[iter + 27] * weights[iter + 7];
-            sum += inputs[iter + 48] * weights[iter + 8];
-            sum += inputs[iter + 49] * weights[iter + 9];
-            sum += inputs[iter + 50] * weights[iter + 10];
-            sum += inputs[iter + 51] * weights[iter + 11];
-            sum += inputs[iter + 72] * weights[iter + 12];
-            sum += inputs[iter + 73] * weights[iter + 13];
-            sum += inputs[iter + 74] * weights[iter + 14];
-            sum += inputs[iter + 75] * weights[iter + 15];
-        }
-    }
-
-    for (; iter < nb_iterations; ++iter)
-        {
-            sum += inputs[iter] * weights[iter];
-        }
-
-     *weightedSum = sum;
-}
-
 static void macsOnRange(const UDATA_T* __restrict inputs,
                         const WDATA_T* __restrict weights,
                         SUM_T* __restrict weightedSum,
@@ -223,40 +232,6 @@ static void macsOnRange(const UDATA_T* __restrict inputs,
         *weightedSum += inputs[iter] * weights[iter];
     }
 }
-
-static inline void conv1_patch_unrolled_scalar(
-    const UDATA_T* __restrict row0,
-    const UDATA_T* __restrict row1,
-    const UDATA_T* __restrict row2,
-    const UDATA_T* __restrict row3,
-    const WDATA_T* __restrict weights,
-    SUM_T* __restrict weightedSum)
-{
-    int32_t sum = *weightedSum;
-
-    sum += (int32_t)row0[0] * (int32_t)weights[0];
-    sum += (int32_t)row0[1] * (int32_t)weights[1];
-    sum += (int32_t)row0[2] * (int32_t)weights[2];
-    sum += (int32_t)row0[3] * (int32_t)weights[3];
-
-    sum += (int32_t)row1[0] * (int32_t)weights[4];
-    sum += (int32_t)row1[1] * (int32_t)weights[5];
-    sum += (int32_t)row1[2] * (int32_t)weights[6];
-    sum += (int32_t)row1[3] * (int32_t)weights[7];
-
-    sum += (int32_t)row2[0] * (int32_t)weights[8];
-    sum += (int32_t)row2[1] * (int32_t)weights[9];
-    sum += (int32_t)row2[2] * (int32_t)weights[10];
-    sum += (int32_t)row2[3] * (int32_t)weights[11];
-
-    sum += (int32_t)row3[0] * (int32_t)weights[12];
-    sum += (int32_t)row3[1] * (int32_t)weights[13];
-    sum += (int32_t)row3[2] * (int32_t)weights[14];
-    sum += (int32_t)row3[3] * (int32_t)weights[15];
-
-    *weightedSum = sum;
-}
-
 
 static UDATA_T saturate(SUM_T value, uint32_t sat) {
     return clamp(value, (SUM_T)(0), ((SUM_T)(1) << sat) - 1);
@@ -401,52 +376,96 @@ static void convcellPropagate1(
                     mac16buf_only(weights + wOffset, &weightedSum);
                 }
                 else {
-                    const int wOffset = NB_CHANNELS * (sxMin
-                        + KERNEL_WIDTH * (syMin + KERNEL_HEIGHT * output));
-
-                    conv1_patch_unrolled_scalar(
-                        row0, row1, row2, row3,
-                        weights + wOffset, weightedSum);
-                
                     /*
-                     * 安全回退路径：保持原始卷积语义。
-                     * 这条路径主要用于 unaligned/padding/wrap 等特殊情况。
-                     */
-                    // for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
-                    //     if ((PADDING_Y != 0 || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
-                    //         && sy >= syMax - syMin)
-                    //     {
-                    //         break;
-                    //     }
+                    * 安全回退路径：保持原始卷积语义。
+                    * 但这里不再一个 sx 一个 sx 地处理，而是优先一整行一整行处理。
+                    *
+                    * 对 Conv1 来说：
+                    *   KERNEL_WIDTH = 4
+                    *   NB_CHANNELS = 1
+                    *   所以一行 = 4 个 input = 4 个 MAC
+                    */
+                    for (int sy = 0; sy <= KERNEL_HEIGHT - 4; sy += 4) {
+                        if ((PADDING_Y != 0 || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
+                            && sy >= syMax - syMin)
+                        {
+                            break;
+                        }
 
-                    //     for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
-                    //         if ((PADDING_X != 0 || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
-                    //             && sx >= sxMax - sxMin)
-                    //         {
-                    //             break;
-                    //         }
+                        /*
+                        * 当前 kernel row 对应的 input 起始位置。
+                        * 注意这里从 sxMin 开始，所以如果有 padding，左边无效部分会被跳过。
+                        */
+                        const int iPos = ((sxMin + ix)
+                                        + CHANNELS_WIDTH * (iy + syMin + sy));
+                        int iOffset = INPUT_MEM_STRIDE * iPos;
 
-                    //         const int iPos = ((sxMin + sx + ix)
-                    //                         + CHANNELS_WIDTH * (iy + syMin + sy));
-                    //         int iOffset = INPUT_MEM_STRIDE * iPos;
+                        bool wrapInRange = false;
 
-                    //         if (INPUT_MEM_WRAP_SIZE > 0
-                    //             && iOffset >= INPUT_MEM_CONT_SIZE)
-                    //         {
-                    //             iOffset += INPUT_MEM_WRAP_OFFSET
-                    //                      - INPUT_MEM_CONT_OFFSET
-                    //                      - INPUT_MEM_CONT_SIZE;
-                    //         }
+                        if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
+                            iOffset += INPUT_MEM_WRAP_OFFSET
+                                    - INPUT_MEM_CONT_OFFSET
+                                    - INPUT_MEM_CONT_SIZE;
+                        }
+                        else if (INPUT_MEM_WRAP_SIZE > 0
+                            && KERNEL_WIDTH > 1
+                            && CHANNELS_HEIGHT == 1
+                            && iOffset + KERNEL_WIDTH * NB_CHANNELS > INPUT_MEM_CONT_SIZE)
+                        {
+                            wrapInRange = true;
+                        }
 
-                    //         const int wOffset = NB_CHANNELS * (sxMin + sx
-                    //             + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
+                        /*
+                        * 当前 kernel row 对应的 weight 起始位置。
+                        * weight layout:
+                        *   [output][sy][sx][channel]
+                        */
+                        const int wOffset = NB_CHANNELS * (sxMin
+                            + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
 
-                    //         macsOnRange(inputs + iOffset,
-                    //                     weights + wOffset,
-                    //                     &weightedSum,
-                    //                     NB_CHANNELS);
-                    //     }
-                    // }
+                        /*
+                        * 如果 input memory 中这一行是连续的，就整行处理。
+                        * Conv1 中 NB_CHANNELS = INPUT_MEM_STRIDE = 1，
+                        * 所以正常情况下这里会成立。
+                        */
+                        if (!wrapInRange && NB_CHANNELS == INPUT_MEM_STRIDE) {
+                            macsOnRange_no_alined(
+                                inputs + iOffset,
+                                weights + wOffset,
+                                &weightedSum,
+                                KERNEL_WIDTH * NB_CHANNELS * 4
+                            );
+                        }
+                        else {
+                            /*
+                            * 极端 fallback：
+                            * 如果这一行发生 wrap，或者 memory stride 不连续，
+                            * 才退回到 sx-by-sx。
+                            */
+                            for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
+                                if ((PADDING_X != 0 || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
+                                    && sx >= sxMax - sxMin)
+                                {
+                                    break;
+                                }
+
+                                int iOffsetInRange = iOffset + sx * INPUT_MEM_STRIDE;
+
+                                if (wrapInRange && iOffsetInRange >= INPUT_MEM_CONT_SIZE) {
+                                    iOffsetInRange += INPUT_MEM_WRAP_OFFSET
+                                                    - INPUT_MEM_CONT_OFFSET
+                                                    - INPUT_MEM_CONT_SIZE;
+                                }
+
+                                macsOnRange(
+                                    inputs + iOffsetInRange,
+                                    weights + wOffset + sx * NB_CHANNELS,
+                                    &weightedSum,
+                                    NB_CHANNELS
+                                );
+                            }
+                        }
+                    }
                 }
 
                 outputs[oOffset + output]
@@ -658,6 +677,12 @@ static void fccellPropagateUDATA_T(
         }
 
         return;
+
+
+    /*
+     * 原始 fallback：
+     * 用于非 FC1、非连续布局、或不对齐情况。
+     */
 }
 
 static void fccellPropagateDATA_T(
@@ -693,22 +718,20 @@ static void fccellPropagateDATA_T(
      */
     const int total_inputs = NB_CHANNELS * CHANNELS_WIDTH * CHANNELS_HEIGHT;
 
-    const bool fc2_buffer_ok = false;
-        // (total_inputs == 150)
-        // && (INPUT_MEM_STRIDE == NB_CHANNELS)
-        // && (INPUT_MEM_WRAP_SIZE == 0)
-        // && (((uintptr_t)inputs & 0x3) == 0);
 
-    if (fc2_buffer_ok) {
-        // 只 buffer 前 144 个 input，剩下 6 个 input 在每个 output 中 scalar 累加。
-        for (int block = 0; block < 9; ++block) {
-            buffer4_contiguous16_fc2(inputs + block * 16);
-        }
+    // 只 buffer 前 144 个 input，剩下 6 个 input 在每个 output 中 scalar 累加。
+    for (int block = 0; block < 9; ++block) {
+        buffer4_contiguous16_fc2(inputs + block * 16);
+    }
 
-        for (int och = 0; och < NB_OUTPUTS; och++) {
-            SUM_T weightedSum = biasses[och];
+    for (int och = 0; och < NB_OUTPUTS; och++) {
+        SUM_T weightedSum = biasses[och];
 
-            const int wBase = och * total_inputs;
+        const int wBase = och * total_inputs;
+        const WDATA_T* weight_ptr = weights + wBase;
+        const bool weight_aligned = (((uintptr_t)weight_ptr & 0x3) == 0);
+
+        if (weight_aligned) {
 
             for (int block = 0; block < 9; ++block) {
                 mac16buf_only(weights + wBase + block * 16, &weightedSum);
@@ -718,70 +741,76 @@ static void fccellPropagateDATA_T(
             for (int i = 144; i < total_inputs; ++i) {
                 weightedSum += inputs[i] * weights[wBase + i];
             }
-
-            outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
+        }else{
+            macsOnRange_no_alined_for_fc2(
+                inputs, 
+                weights + wBase, 
+                &weightedSum, total_inputs);
         }
-
-        return;
-    }
-
-    /*
-     * 原始 fallback：
-     * 用于非 FC2、非连续布局、或不对齐情况。
-     */
-    for (int och = 0; och < NB_OUTPUTS; och++) {
-        SUM_T weightedSum = biasses[och];
-
-        for (int iy = 0; iy < CHANNELS_HEIGHT; ++iy) {
-            const int iPos = (CHANNELS_WIDTH * iy);
-            int iOffset = INPUT_MEM_STRIDE * iPos;
-
-            bool wrapInRange = false;
-
-            if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
-                iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-                            - INPUT_MEM_CONT_SIZE;
-            }
-            else if (INPUT_MEM_WRAP_SIZE > 0 && CHANNELS_WIDTH > 1
-                && CHANNELS_HEIGHT == 1
-                && iOffset + CHANNELS_WIDTH * NB_CHANNELS
-                    > INPUT_MEM_CONT_SIZE)
-            {
-                wrapInRange = true;
-            }
-
-            const int wOffset = NB_CHANNELS * CHANNELS_WIDTH
-                                    * (iy + CHANNELS_HEIGHT * och);
-
-            if (!wrapInRange && INPUT_MEM_STRIDE == NB_CHANNELS) {
-                macsOnRange(
-                    inputs + iOffset, 
-                    weights + wOffset, 
-                    &weightedSum, NB_CHANNELS * CHANNELS_WIDTH);
-            }
-            else {
-                for (int ix = 0; ix < CHANNELS_WIDTH; ++ix) {
-                    int iOffsetInRange = iOffset + ix * INPUT_MEM_STRIDE;
-
-                    if (wrapInRange
-                        && iOffsetInRange >= INPUT_MEM_CONT_SIZE)
-                    {
-                        iOffsetInRange += INPUT_MEM_WRAP_OFFSET
-                                    - INPUT_MEM_CONT_OFFSET
-                                    - INPUT_MEM_CONT_SIZE;
-                    }
-
-                    macsOnRange(
-                        inputs + iOffsetInRange, 
-                        weights + wOffset + ix * NB_CHANNELS, 
-                        &weightedSum, NB_CHANNELS);
-                }
-            }
-        }
-
         outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
     }
+
+    return;
 }
+
+
+//     /*
+//      * 原始 fallback：
+//      * 用于非 FC2、非连续布局、或不对齐情况。
+//      */
+//     for (int och = 0; och < NB_OUTPUTS; och++) {
+//         SUM_T weightedSum = biasses[och];
+
+//         for (int iy = 0; iy < CHANNELS_HEIGHT; ++iy) {
+//             const int iPos = (CHANNELS_WIDTH * iy);
+//             int iOffset = INPUT_MEM_STRIDE * iPos;
+
+//             bool wrapInRange = false;
+
+//             if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
+//                 iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
+//                             - INPUT_MEM_CONT_SIZE;
+//             }
+//             else if (INPUT_MEM_WRAP_SIZE > 0 && CHANNELS_WIDTH > 1
+//                 && CHANNELS_HEIGHT == 1
+//                 && iOffset + CHANNELS_WIDTH * NB_CHANNELS
+//                     > INPUT_MEM_CONT_SIZE)
+//             {
+//                 wrapInRange = true;
+//             }
+
+//             const int wOffset = NB_CHANNELS * CHANNELS_WIDTH
+//                                     * (iy + CHANNELS_HEIGHT * och);
+
+//             if (!wrapInRange && INPUT_MEM_STRIDE == NB_CHANNELS) {
+//                 macsOnRange(
+//                     inputs + iOffset, 
+//                     weights + wOffset, 
+//                     &weightedSum, NB_CHANNELS * CHANNELS_WIDTH);
+//             }
+//             else {
+//                 for (int ix = 0; ix < CHANNELS_WIDTH; ++ix) {
+//                     int iOffsetInRange = iOffset + ix * INPUT_MEM_STRIDE;
+
+//                     if (wrapInRange
+//                         && iOffsetInRange >= INPUT_MEM_CONT_SIZE)
+//                     {
+//                         iOffsetInRange += INPUT_MEM_WRAP_OFFSET
+//                                     - INPUT_MEM_CONT_OFFSET
+//                                     - INPUT_MEM_CONT_SIZE;
+//                     }
+
+//                     macsOnRange(
+//                         inputs + iOffsetInRange, 
+//                         weights + wOffset + ix * NB_CHANNELS, 
+//                         &weightedSum, NB_CHANNELS);
+//                 }
+//             }
+//         }
+
+//         outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
+//     }
+// }
 
 static void maxPropagate1(
     const DATA_T* __restrict inputs,
