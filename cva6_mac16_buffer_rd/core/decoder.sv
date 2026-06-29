@@ -1186,14 +1186,14 @@ module decoder
           instruction_o.fu      = ALU;
           instruction_o.rd[4:0] = instr.utype.rd;
         end
-// ↓↓↓ Modification ↓↓↓
+        // ↓↓↓ Modification ↓↓↓
         // Custom instruction DOT8 (Opcode: 0001011)
         7'b0001011: begin 
           imm_select             = RS3; //modification: use RS3 to fetch the accumulator
           instruction_o.fu       = CVXIF;            // Dispatch the task to the Multiplier unit
           instruction_o.rs1[4:0] = instruction_i[16:12]; // Extract source register 1 (t1)
           instruction_o.rs2[4:0] = instruction_i[21:17]; // Extract source register 2 (t2)
-          instruction_o.rd[4:0]  = instr.rtype.rd;  // Extract destination register (sum)
+          instruction_o.rd[4:0]  = 5'd0;  // Extract destination register (sum)
           instruction_o.op = ariane_pkg::MAC16BUF;  // Attach the DOT8 label we registered in ariane_pkg
           //instruction_o.result = {54'b0, instruction_i[31:27], instruction_i[26:22]}; // Pass the 5-bit immediate (which contains the shift amount) in the upper bits of the result field, zero-extend to 64 bits
           end
@@ -1203,7 +1203,7 @@ module decoder
           instruction_o.fu       = CVXIF;            // Dispatch the task to the Multiplier unit
           instruction_o.rs1[4:0] = instruction_i[16:12]; // Extract source register 1 (t1)
           instruction_o.rs2[4:0] = instruction_i[21:17]; // Extract source register 2 (t2)
-          instruction_o.rd[4:0]  = instr.rtype.rd;  // Extract destination register (sum)
+          instruction_o.rd[4:0]  = 5'd0;  // Extract destination register (sum)
           instruction_o.op = ariane_pkg::BUF4;  // Attach the DOT8 label we registered in ariane_pkg
           //instruction_o.result = {54'b0, instruction_i[31:27], instruction_i[26:22]}; // Pass the 5-bit immediate (which contains the shift amount) in the upper bits of the result field, zero-extend to 64 bits
           end
@@ -1211,22 +1211,25 @@ module decoder
           7'b1011011: begin 
           instruction_o.fu       = CVXIF;            
           unique case (instruction_i[14:12])
-            3'b000 begin
+            3'b000 : begin
               imm_select         = NOIMM;
               instruction_o.op = ariane_pkg::ACC_INIT;
               instruction_o.rs1[4:0] = instr.rtype.rs1; 
               instruction_o.rs2[4:0] = 5'd0; 
               instruction_o.rd[4:0] = 5'd0;
             end
-            3'b000 begin
+            3'b001 : begin
               imm_select         = NOIMM;
               instruction_o.op = ariane_pkg::ACC_GET;
               instruction_o.rs1[4:0] = 5'd0; 
               instruction_o.rs2[4:0] = 5'd0; 
               instruction_o.rd[4:0] = instr.rtype.rd;
             end
+          endcase
+          end
         // ↑↑↑ Modification ↑↑↑
-        default: illegal_instr = 1'b1;
+        default: begin 
+          illegal_instr = 1'b1;
           end
       endcase
     end

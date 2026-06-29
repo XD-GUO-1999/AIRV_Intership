@@ -169,8 +169,8 @@ module cvxif_example_coprocessor
 
   assign is_buf4_ex     = (req_o.req.instr[6:0] == 7'b0101011);
   assign is_mac16buf_ex = (req_o.req.instr[6:0] == 7'b0001011);
-  assign is_acc_init_ex = (req_o.req.instr[6:0] == 7'b0001011 && );
-  assign is_acc_get_ex = (req_o.req.instr[6:0] == 7'b0001011 && );
+  assign is_acc_init_ex = (req_o.req.instr[6:0] == 7'b1011011 && req_o.req.instr[14:12] == 3'b000);
+  assign is_acc_get_ex = (req_o.req.instr[6:0] == 7'b1011011 && req_o.req.instr[14:12] == 3'b001);
 
 
   // FIFO 非空且没被杀掉时，结果有效
@@ -259,7 +259,7 @@ module cvxif_example_coprocessor
                     + 32'(p9) + 32'(p10) + 32'(p11) + 32'(p12) + 32'(p13) + 32'(p14) + 32'(p15); // we add the result togeter
 
     end else begin
-      mac_result = '0;
+      partial_sum = '0;
     end
   end
 

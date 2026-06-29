@@ -41,9 +41,9 @@ package cvxif_instr_pkg;
               loadstore : 1'b0,
               exc : 1'b0
           }
-      }
+      },
      '{
-          instr: 32'b00000_00_00000_00000_0_00_00000_0001011,  // custom2 opcode
+          instr: 32'b00000_00_00000_00000_0_00_00000_1011011,  // custom2 opcode
           mask: 32'b00000_00_00000_00000_1_11_00000_1111111,
           resp : '{
               accept : 1'b1,
@@ -53,9 +53,9 @@ package cvxif_instr_pkg;
               loadstore : 1'b0,
               exc : 1'b0
           }
-      }
+      },
      '{
-          instr: 32'b00000_00_00000_00000_0_01_00000_0001011,  // custom2 opcode
+          instr: 32'b00000_00_00000_00000_0_01_00000_1011011,  // custom2 opcode
           mask: 32'b00000_00_00000_00000_1_11_00000_1111111,
           resp : '{
               accept : 1'b1,
