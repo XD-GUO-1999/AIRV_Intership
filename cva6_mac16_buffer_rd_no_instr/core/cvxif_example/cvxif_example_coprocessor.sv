@@ -292,7 +292,7 @@ module cvxif_example_coprocessor
   logic               x_issue_ready_o;
   x_issue_req_t       x_issue_req_i;
   x_issue_resp_t      x_issue_resp_o;
-  x_issue_resp_t      x_issue_resp_dec;
+  x_issue_resp_t      x_issue_resp_dec; //modifcation
   //Commit interface
   logic               x_commit_valid_i;
   x_commit_t          x_commit_i;
@@ -467,9 +467,6 @@ module cvxif_example_coprocessor
   logic signed [31:0] mac_base_acc;
   logic signed [31:0] mac_next_acc;
 
-  logic is_acc_init_ex;
-  logic is_acc_get_ex;
-
   logic [31:0] input_buffer [0:INPUT_BUF_WORDS-1];
 
   logic [4:0] wr_block_cnt_q;
@@ -489,8 +486,6 @@ module cvxif_example_coprocessor
 
   assign is_buf4_ex     = req_o.is_buf4;
   assign is_mac16buf_ex = req_o.is_mac16buf;
-  assign is_acc_init_ex = (req_o.req.instr[6:0] == 7'b1011011 && req_o.req.instr[14:12] == 3'b000);
-  assign is_acc_get_ex  = (req_o.req.instr[6:0] == 7'b1011011 && req_o.req.instr[14:12] == 3'b001);
 
 
   // FIFO 非空且没被杀掉时，结果有效
@@ -526,10 +521,6 @@ module cvxif_example_coprocessor
         if (buf_active_blocks != active_blocks_q) begin
           rd_block_cnt_q <= 5'd0; // Reset read block counter if active blocks change
         end
-      end else if (is_acc_init_ex) begin
-        // Kept for compatibility, but the auto-accumulator MAC16BUF flow
-        // does not need ACC_INIT/ACC_GET anymore.
-        acc_q <= $signed(req_o.req.rs[0]);
       end else if (is_mac16buf_ex) begin
         // Auto local accumulator:
         //   first block : acc = old rd + partial_sum
@@ -618,16 +609,14 @@ module cvxif_example_coprocessor
 
 
   always_comb begin
-    x_result_o.data    = is_mac16buf_ex ? mac_next_acc :
-                         is_acc_get_ex   ? acc_q : '0;
+    x_result_o.data    = is_mac16buf_ex ? mac_next_acc : '0;
     x_result_o.id      = req_o.req.id;
     x_result_o.rd      = req_o.req.instr[11:7];
 
     // For the auto-accumulator mode, only the final MAC16BUF of one output
     // element writes back to the architectural register. Non-final MAC16BUF
     // instructions only update acc_q locally.
-    x_result_o.we      = req_o.resp.writeback & x_result_valid_o &
-                         ((is_mac16buf_ex & req_o.is_final_block) | is_acc_get_ex);
+    x_result_o.we = req_o.resp.writeback & x_result_valid_o & is_mac16buf_ex & req_o.is_final_block;
     x_result_o.exc     = 1'b0;
     x_result_o.exccode = '0;
   end

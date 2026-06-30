@@ -26,9 +26,9 @@ module mult
   logic div_valid_op;
   logic mul_valid_op;
   // Input Arbitration
-//modification
+//modification : add MAC4 instruction to the valid operation list, which is a custom instruction for CVA6
   assign mul_valid_op = ~flush_i && mult_valid_i && (fu_data_i.operation inside { MUL, MULH, MULHU, MULHSU, MULW, CLMUL, CLMULH, CLMULR, ariane_pkg::MAC4 });
-//modofocation
+//////
   assign div_valid_op = ~flush_i && mult_valid_i && (fu_data_i.operation inside { DIV, DIVU, DIVW, DIVUW, REM, REMU, REMW, REMUW });
 
   // ---------------------

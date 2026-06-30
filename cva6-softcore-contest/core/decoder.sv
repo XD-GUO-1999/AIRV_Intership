@@ -1187,9 +1187,9 @@ module decoder
           instruction_o.rd[4:0] = instr.utype.rd;
         end
 // ↓↓↓ Modification ↓↓↓
-        // Custom instruction DOT8 (Opcode: 0001011)
+        // Let the cup realize custom instruction MAC4 (Opcode: 0001011)
         7'b0001011: begin 
-          imm_select             = RS3; //modification: use RS3 to fetch the accumulator
+          imm_select             = RS3;             // use RS3 to fetch the accumulator
           instruction_o.fu       = MULT;            // Dispatch the task to the Multiplier unit
           instruction_o.rs1[4:0] = instr.rtype.rs1; // Extract source register 1 (t1)
           instruction_o.rs2[4:0] = instr.rtype.rs2; // Extract source register 2 (t2)

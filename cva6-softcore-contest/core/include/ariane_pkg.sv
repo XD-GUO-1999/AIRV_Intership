@@ -443,9 +443,9 @@ package ariane_pkg;
     MULHU,
     MULHSU,
     MULW,
-    //modification
+    //modification: add MAC4 instruction to the fu_op enum, which is a custom instruction for CVA6
     MAC4,
-    //modification
+    //////
   
     // Divisions
     DIV,

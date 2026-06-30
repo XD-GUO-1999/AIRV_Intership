@@ -211,10 +211,10 @@ module issue_read_operands
     if ((CVA6Cfg.FpPresent && is_imm_fpr(
             issue_instr_i.op
         )) ? rd_clobber_fpr_i[issue_instr_i.result[REG_ADDR_SIZE-1:0]] != NONE :
-        //modification
+        //modification : when we use MAC4 and offload, judge rd_clobber_gpr_i is avaliable or not
             (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC4) && CVA6Cfg.NrRgprPorts == 3 ?
             rd_clobber_gpr_i[(issue_instr_i.op == ariane_pkg::MAC4) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0]] != NONE : 0) begin
-        //modofication : when we use MAC4 and offload, judge rs3 is avaliable or not
+        //modification : when we use MAC4 and offload, judge rs3 is avaliable or not
       // if the operand is available, forward it. CSRs don't write to/from FPR so no need to check
       if (rs3_valid_i) begin
         forward_rs3 = 1'b1;
@@ -585,7 +585,7 @@ module issue_read_operands
 
   //pragma translate_off
   initial begin
-    assert (CVA6Cfg.NrRgprPorts == 2 || CVA6Cfg.NrRgprPorts == 3) //&& CVA6Cfg.CvxifEn)) //modification
+    assert (CVA6Cfg.NrRgprPorts == 2 || CVA6Cfg.NrRgprPorts == 3) //&& CVA6Cfg.CvxifEn)) //modification : delete CVXIFEn, because it's not necessary to check CVXIFEn, if we use 3 read ports, it can be used for CVXIF
     else
       $fatal(
           1,

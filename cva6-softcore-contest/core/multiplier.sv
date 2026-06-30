@@ -27,7 +27,7 @@ module multiplier
     input  fu_op                             operation_i,
     input  riscv::xlen_t                     operand_a_i,
     input  riscv::xlen_t                     operand_b_i,
-    input  riscv::xlen_t                     operand_c_i, //modification
+    input  riscv::xlen_t                     operand_c_i, //modification: add a 3rd operand for MAC4 instruction, which is used to store the accumulator value
     output riscv::xlen_t                     result_o,
     output logic                             mult_valid_o,
     output logic                             mult_ready_o,
