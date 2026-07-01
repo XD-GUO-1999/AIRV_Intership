@@ -27,8 +27,8 @@ module multiplier
     input  fu_op                             operation_i,
     input  riscv::xlen_t                     operand_a_i,
     input  riscv::xlen_t                     operand_b_i,
-    input  riscv::xlen_t                     operand_c_i, //modification
-    //add rs4 and rs5 for mac8
+    input  riscv::xlen_t                     operand_c_i, //modification 3rd as acc
+    //add new operands for mac16
     input  riscv::xlen_t                     operand_d_i,
     input  riscv::xlen_t                     operand_e_i,
     input  riscv::xlen_t                     operand_f_i,
@@ -102,7 +102,7 @@ module multiplier
   //              $signed(operand_c_i));
   //   end
   // end
-  //modification 
+  //modification logic of calculation
     assign mac16_res_d = ($signed({1'b0, operand_a_i[7:0]})*$signed(operand_b_i[7:0])) + 
                           ($signed({1'b0, operand_a_i[15:8]})*$signed(operand_b_i[15:8])) + 
                           ($signed({1'b0, operand_a_i[23:16]})*$signed(operand_b_i[23:16])) + 
@@ -195,7 +195,7 @@ module multiplier
       trans_id_q    <= '0;
       operator_q    <= MUL;
       mult_result_q <= '0;
-      mac16_res_q <= '0;//modification
+      mac16_res_q <= '0;//modification initialization 
     end else begin
       // Input silencing
       trans_id_q    <= trans_id_i;
@@ -203,7 +203,7 @@ module multiplier
       mult_valid_q  <= mult_valid;
       operator_q    <= operator_d;
       mult_result_q <= mult_result_d;
-      mac16_res_q <= mac16_res_d;//modification
+      mac16_res_q <= mac16_res_d;//modification send the result
     end
   end
 endmodule

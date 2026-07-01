@@ -142,7 +142,8 @@ module cvxif_example_coprocessor
       .overflow_o()
   );
 
-  localparam int unsigned  INPUT_BUF_WORDS = 100;  
+// Modification: define the buffer parameters and key control signals.
+  localparam int unsigned  INPUT_BUF_WORDS = 100;
 
   logic [31:0] input_buffer [0:INPUT_BUF_WORDS-1];
 
@@ -156,7 +157,7 @@ module cvxif_example_coprocessor
   logic [6:0] rd_base;
 
   assign buf_active_blocks = req_o.req.instr[11:7] + 5'd1;
-  
+
   assign wr_base = {wr_block_sel, 2'b00};
   assign rd_base = {rd_block_cnt_q, 2'b00};
 
@@ -164,11 +165,11 @@ module cvxif_example_coprocessor
   assign is_buf4_ex     = (req_o.req.instr[6:0] == 7'b0101011);
   assign is_mac16buf_ex = (req_o.req.instr[6:0] == 7'b0001011);
 
-  // FIFO 非空且没被杀掉时，结果有效
+  // Modification: handle the FIFO state.
   assign x_result_valid_o = ~fifo_empty && ~x_commit_i.x_commit_kill;
 
   assign wr_block_sel = (is_buf4_ex && (buf_active_blocks != active_blocks_q)) ? 5'd0 : wr_block_cnt_q;
-  // Buffer 写入状态机 (响应 buf4)
+  // Buffer write state machine (response to buf4)
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       active_blocks_q <= 5'd1;
@@ -206,7 +207,7 @@ module cvxif_example_coprocessor
     end
   end
 
-  // MAC16 并行乘加逻辑 (响应 mac16buf)
+  // MAC16 parallel multiply-accumulate logic (response to mac16buf)
   logic signed [31:0] mac_result;
   logic signed [15:0] p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15;
   logic signed [31:0] input1, input2, input3, input4, weight1, weight2, weight3, weight4, acc;
@@ -251,7 +252,7 @@ module cvxif_example_coprocessor
 
 
   always_comb begin
-    x_result_o.data    = mac_result;
+    x_result_o.data    = mac_result; //modification: send the result of the MAC16 operation to the CPU
     x_result_o.id      = req_o.req.id;
     x_result_o.rd      = req_o.req.instr[11:7];
     x_result_o.we      = req_o.resp.writeback & x_result_valid_o & is_mac16buf_ex; 

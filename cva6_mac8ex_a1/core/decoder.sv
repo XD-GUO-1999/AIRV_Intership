@@ -1189,7 +1189,7 @@ module decoder
 // ↓↓↓ Modification ↓↓↓
         // Custom instruction DOT8 (Opcode: 0001011)
         7'b0001011: begin 
-          imm_select             = RS3; //modification: use RS3 to fetch the accumulator
+          imm_select             = RS3;             //use RS3 to fetch the accumulator
           instruction_o.fu       = MULT;            // Dispatch the task to the Multiplier unit
           instruction_o.rs1[4:0] = instruction_i[16:12]; // Extract source register 1 (t1)
           instruction_o.rs2[4:0] = instruction_i[21:17]; // Extract source register 2 (t2)
@@ -1278,7 +1278,7 @@ module decoder
         instruction_o.result  = imm_uj_type;
         instruction_o.use_imm = 1'b1;
       end
-      RS3: begin //modification: for instructions that use rs3 as an immediate (e.g., DOT8), 
+      RS3: begin //modification: for instructions that use rs3 as an immediate (e.g., MAC8), 
       //pass the value in the result field and set use_imm to 1 so the execution unit knows to use it as an immediate rather than a register value
         if (instruction_o.op == ariane_pkg::MAC8EX) begin
           instruction_o.result  = {{riscv::XLEN - 10{1'b0}}, instruction_i[31:27], instruction_i[26:22]}; // result holds the 10-bit immediate for MAC8EX

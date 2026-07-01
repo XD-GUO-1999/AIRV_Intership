@@ -150,7 +150,7 @@ module issue_read_operands
 
   assign fu_data_o.operand_a = operand_a_q;
   assign fu_data_o.operand_b = operand_b_q;
-  //modification : con
+  //modification : connect the fu data
   assign fu_data_o.operand_d = operand_d_q;
   assign fu_data_o.operand_e = operand_e_q;
   assign fu_data_o.operand_f = operand_f_q;
@@ -215,7 +215,7 @@ module issue_read_operands
     // poll the scoreboard for those values
     rs1_o = issue_instr_i.rs1;
     rs2_o = issue_instr_i.rs2;
-    //modification: use the rd as 3rd regisiter if we use mac4
+    //modification: use the rd as 3rd regisiter if we use mac16
     rs3_o = (issue_instr_i.op == ariane_pkg::MAC16) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0]; 
     if (issue_instr_i.op == ariane_pkg::MAC16) begin
       rs4_o = issue_instr_i.result[4:0]; //modification: 
@@ -276,7 +276,7 @@ module issue_read_operands
         //modification
             (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC16) && CVA6Cfg.NrRgprPorts == 9 ?
             rd_clobber_gpr_i[(issue_instr_i.op == ariane_pkg::MAC16) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0]] != NONE : 0) begin
-        //modification : when we use MAC4 and offload, judge rs3 is avaliable or not
+        //modification : when we use MAC16 and offload, judge rs3 is avaliable or not
       // if the operand is available, forward it. CSRs don't write to/from FPR so no need to check
       if (rs3_valid_i) begin
         forward_rs3 = 1'b1;
@@ -313,8 +313,8 @@ module issue_read_operands
     end
   end
 
-  // third operand from fp regfile or gp regfile if NR_RGPR_PORTS == 5
-  if (CVA6Cfg.NrRgprPorts == 9) begin : gen_gp_rs3 //modification 3 -> 5
+  // third operand from fp regfile or gp regfile if NR_RGPR_PORTS == 9
+  if (CVA6Cfg.NrRgprPorts == 9) begin : gen_gp_rs3 //modification 3 -> 9
       assign imm_forward_rs3 = rs3_i;
   end else begin : gen_fp_rs3
       assign imm_forward_rs3 = {{riscv::XLEN-CVA6Cfg.FLen{1'b0}}, rs3_i};
@@ -338,7 +338,7 @@ module issue_read_operands
     if (CVA6Cfg.NrRgprPorts == 9) begin//modification 3 -> 9
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} :
-          (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC16) ? operand_c_regfile : issue_instr_i.result; //modification : ajout MAC8EX
+          (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC16) ? operand_c_regfile : issue_instr_i.result; //modification : ajout MAC16
     end else begin
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} : issue_instr_i.result;
@@ -558,14 +558,14 @@ module issue_read_operands
   logic [CVA6Cfg.NrCommitPorts-1:0][riscv::XLEN-1:0] wdata_pack;
   logic [CVA6Cfg.NrCommitPorts-1:0]                  we_pack;
 
-  if (CVA6Cfg.NrRgprPorts == 9) begin : gen_rs9 //modification
+  if (CVA6Cfg.NrRgprPorts == 9) begin : gen_rs9 //modification : here to define the raddr pack to know where to read the data of port
   assign raddr_pack = {
-        (issue_instr_i.op == ariane_pkg::MAC16) ? 5'd31 : 5'd0, 
+        (issue_instr_i.op == ariane_pkg::MAC16) ? 5'd31 : 5'd0, // 4 operands implicit
         (issue_instr_i.op == ariane_pkg::MAC16) ? 5'd30 : 5'd0, 
         (issue_instr_i.op == ariane_pkg::MAC16) ? 5'd29 : 5'd0, 
         (issue_instr_i.op == ariane_pkg::MAC16) ? 5'd28 : 5'd0, 
-        (issue_instr_i.op == ariane_pkg::MAC16) ? issue_instr_i.result[9:5] : 5'd0, // modification: if we use MAC16, the 4th and 5th port will read x28 and x29 as rs4 and rs5, otherwise they read x0
-        (issue_instr_i.op == ariane_pkg::MAC16) ? issue_instr_i.result[4:0] : 5'd0, // important; here we apply as rs5 rs4 rs3 rs2 rs1, the order is important
+        (issue_instr_i.op == ariane_pkg::MAC16) ? issue_instr_i.result[9:5] : 5'd0, // 4 operands explicit
+        (issue_instr_i.op == ariane_pkg::MAC16) ? issue_instr_i.result[4:0] : 5'd0, 
         (issue_instr_i.op == ariane_pkg::MAC16) ? issue_instr_i.rd[4:0] : issue_instr_i.result[4:0], // Port 3: rd/acc
         issue_instr_i.rs2[4:0], // Port 2: rs2
         issue_instr_i.rs1[4:0]  // Port 1: rs1
@@ -668,7 +668,7 @@ module issue_read_operands
     end
   endgenerate
 
-  if (CVA6Cfg.NrRgprPorts == 9) begin : gen_operand_c //modification 5 -> 9
+  if (CVA6Cfg.NrRgprPorts == 9) begin : gen_operand_c //modification 3 -> 9
     assign operand_c_fpr = {{riscv::XLEN-CVA6Cfg.FLen{1'b0}}, fprdata[2]};
     assign operand_c_gpr = rdata[2];
   end else begin
@@ -715,7 +715,7 @@ module issue_read_operands
     end else begin
       operand_a_q           <= operand_a_n;
       operand_b_q           <= operand_b_n;
-      //modification : send
+      //modification : save the data in the register
       operand_d_q           <= operand_d_n;
       operand_e_q           <= operand_e_n;
       operand_f_q           <= operand_f_n;

@@ -46,17 +46,6 @@ module mult
   // Multiplication
   // ---------------------
 
-  //modification to debug
-  // always @(posedge clk_i) begin
-  //   if (mult_valid_i) begin
-  //     $display("DEBUG_CHECK: OpA=%h, OpB=%h, OpD=%h, OpE=%h, Imm=%h", 
-  //              fu_data_i.operand_a, 
-  //              fu_data_i.operand_b, 
-  //              fu_data_i.operand_d, 
-  //              fu_data_i.operand_e, 
-  //              fu_data_i.imm);
-  //   end
-  // end
   multiplier #(
       .CVA6Cfg(CVA6Cfg)
   ) i_multiplier (
@@ -67,7 +56,7 @@ module mult
       .operand_a_i    (fu_data_i.operand_a),
       .operand_b_i    (fu_data_i.operand_b),
       .operand_c_i    (fu_data_i.imm),//modification use imm to store 3rd data
-      //modification: add rs3 and rs4
+      //modification: add the new operands
       .operand_d_i    (fu_data_i.operand_d),
       .operand_e_i    (fu_data_i.operand_e),
       .operand_f_i    (fu_data_i.operand_f),

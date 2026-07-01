@@ -40,7 +40,7 @@ module cvxif_fu
   logic [31:0] illegal_instr_n, illegal_instr_q;
   logic [X_NUM_RS-1:0] rs_valid;
 
-  if (cvxif_pkg::X_NUM_RS == 5) begin : gen_third_operand //modification
+  if (cvxif_pkg::X_NUM_RS == 5) begin : gen_third_operand //modification: added a third operand for the MAC16 buffer, so we need 5 read ports in total
     assign rs_valid = 5'b11111;
   end else begin : gen_no_third_operand
     assign rs_valid = 2'b11;

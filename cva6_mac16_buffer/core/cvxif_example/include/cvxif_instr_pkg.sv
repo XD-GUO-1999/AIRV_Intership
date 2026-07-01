@@ -19,7 +19,7 @@ package cvxif_instr_pkg;
   parameter int unsigned NbInstr = 2;
   parameter copro_issue_resp_t CoproInstr[NbInstr] = '{
       '{
-          instr: 32'b00000_00_00000_00000_0_00_00000_0101011,  // custom1 opcode
+          instr: 32'b00000_00_00000_00000_0_00_00000_0101011,  // custom1 opcode, buffered MAC16 instruction
           mask: 32'b00000_00_00000_00000_0_00_00000_1111111,
           resp : '{
               accept : 1'b1,
@@ -31,7 +31,7 @@ package cvxif_instr_pkg;
           }
       },
       '{
-          instr: 32'b00000_00_00000_00000_0_00_00000_0001011,  // custom0 opcode
+          instr: 32'b00000_00_00000_00000_0_00_00000_0001011,  // custom0 opcode, mac16buf instruction
           mask: 32'b00000_00_00000_00000_0_00_00000_1111111,
           resp : '{
               accept : 1'b1,

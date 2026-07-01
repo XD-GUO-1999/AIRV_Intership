@@ -190,7 +190,7 @@ module issue_read_operands
     // poll the scoreboard for those values
     rs1_o = issue_instr_i.rs1;
     rs2_o = issue_instr_i.rs2;
-    //modification: use the rd as 3rd regisiter if we use mac4
+    //modification: use the rd as 3rd regisiter if we use mac8
     rs3_o = (issue_instr_i.op == ariane_pkg::MAC8EX) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0]; 
     if (issue_instr_i.op == ariane_pkg::MAC8EX) begin
       rs1_o = issue_instr_i.rs1;  // Port 1: rs1
@@ -245,7 +245,7 @@ module issue_read_operands
         //modification
             (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC8EX) && CVA6Cfg.NrRgprPorts == 5 ?
             rd_clobber_gpr_i[(issue_instr_i.op == ariane_pkg::MAC8EX) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0]] != NONE : 0) begin
-        //modofication : when we use MAC4 and offload, judge rs3 is avaliable or not
+        //modofication : when we use MAC8 and offload, judge rs3 is avaliable or not
       // if the operand is available, forward it. CSRs don't write to/from FPR so no need to check
       if (rs3_valid_i) begin
         forward_rs3 = 1'b1;
@@ -502,7 +502,7 @@ module issue_read_operands
         issue_instr_i.rs1[4:0]  // Port 1: rs1
   };
   end else if (CVA6Cfg.NrRgprPorts == 3) begin : gen_rs3
-    assign raddr_pack = (issue_instr_i.op == ariane_pkg::MAC8EX) ? //modification if we use MAC4, the 3rd port should read rd to load rs3
+    assign raddr_pack = (issue_instr_i.op == ariane_pkg::MAC8EX) ? //modification if we use MAC8, the 3rd port should read rd to load rs3
                         {issue_instr_i.rd[4:0], issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]} :
                         {issue_instr_i.result[4:0], issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]};
   end else begin : gen_no_rs3

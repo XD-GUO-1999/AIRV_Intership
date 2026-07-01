@@ -40,7 +40,7 @@ module issue_read_operands
     output logic [REG_ADDR_SIZE-1:0] rs3_o,
     input rs3_len_t rs3_i,
     input logic rs3_valid_i,
-    //modification
+    // modification: extra source register operands for MAC16BUF/BUF4
     output logic [REG_ADDR_SIZE-1:0] rs4_o,
     input riscv::xlen_t rs4_i,
     input logic rs4_valid_i,
@@ -93,14 +93,14 @@ module issue_read_operands
 );
   logic stall;
   logic fu_busy;  // functional unit is busy
-  riscv::xlen_t operand_a_regfile, operand_b_regfile;  // operands coming from regfile
-  //modification :
+  riscv::xlen_t operand_a_regfile, operand_b_regfile;  // Operands coming from the regfile
+  // modification: extra operand values from the regfile for MAC16BUF/BUF4
   riscv::xlen_t operand_d_regfile, operand_e_regfile;
   //
-  rs3_len_t operand_c_regfile, operand_c_fpr, operand_c_gpr;  // third operand from fp regfile or gp regfile if NR_RGPR_PORTS == 3
+  rs3_len_t operand_c_regfile, operand_c_fpr, operand_c_gpr;  // Third operand from the FP regfile or GP regfile when NR_RGPR_PORTS == 3
   // output flipflop (ID <-> EX)
   riscv::xlen_t operand_a_n, operand_a_q, operand_b_n, operand_b_q, imm_n, imm_q, imm_forward_rs3;
-  riscv::xlen_t operand_d_n, operand_d_q, operand_e_n, operand_e_q; //modification
+  riscv::xlen_t operand_d_n, operand_d_q, operand_e_n, operand_e_q; // modification: extra operands for the MAC16BUF/BUF4 path
 
   logic        alu_valid_q;
   logic        mult_valid_q;
@@ -117,9 +117,9 @@ module issue_read_operands
   fu_op operator_n, operator_q;  // operation to perform
   fu_t fu_n, fu_q;  // functional unit to use
 
-  // forwarding signals
+  // Forwarding signals
   logic forward_rs1, forward_rs2, forward_rs3;
-  //modification : 
+  // modification: forwarding for the extra source registers
   logic forward_rs4, forward_rs5;
 
   // original instruction stored in tval
@@ -133,7 +133,7 @@ module issue_read_operands
 
   assign fu_data_o.operand_a = operand_a_q;
   assign fu_data_o.operand_b = operand_b_q;
-  //modification : con
+  // modification: connect the extra operands to the FU data output
   assign fu_data_o.operand_d = operand_d_q;
   assign fu_data_o.operand_e = operand_e_q;
   //
@@ -190,11 +190,11 @@ module issue_read_operands
     // poll the scoreboard for those values
     rs1_o = issue_instr_i.rs1;
     rs2_o = issue_instr_i.rs2;
-    //modification: use the rd as 3rd regisiter if we use mac4
-    rs3_o = (issue_instr_i.op == ariane_pkg::MAC16BUF) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0]; 
+    // modification: for MAC16BUF, use rd as the third source register.
+    rs3_o = (issue_instr_i.op == ariane_pkg::MAC16BUF) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0];
     if (issue_instr_i.op == ariane_pkg::MAC16BUF || issue_instr_i.op == ariane_pkg::BUF4) begin
-      rs4_o = issue_instr_i.result[4:0]; //modification: 
-      rs5_o = issue_instr_i.result[9:5];  //modification: 
+      rs4_o = issue_instr_i.result[4:0];
+      rs5_o = issue_instr_i.result[9:5];
     end else begin
       rs4_o = '0;
       rs5_o = '0;
@@ -243,16 +243,16 @@ module issue_read_operands
         //modification
             (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC16BUF ) && CVA6Cfg.NrRgprPorts == 5 ?
             rd_clobber_gpr_i[(issue_instr_i.op == ariane_pkg::MAC16BUF) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0]] != NONE : 0) begin
-        //modofication : when we use MAC4 and offload, judge rs3 is avaliable or not
-      // if the operand is available, forward it. CSRs don't write to/from FPR so no need to check
+        // modification: for MAC16BUF and OFFLOAD, check whether the third operand is available.
+      // If the operand is available, forward it. CSRs do not write to/from FPR, so no extra check is needed.
       if (rs3_valid_i) begin
         forward_rs3 = 1'b1;
       end else begin  // the operand is not available -> stall
         stall = 1'b1;
       end
     end
-        //modification: 
-    if (issue_instr_i.op == ariane_pkg::MAC16BUF || issue_instr_i.op == ariane_pkg::BUF4)begin
+    // modification: check forwarding for the extra source registers.
+    if (issue_instr_i.op == ariane_pkg::MAC16BUF || issue_instr_i.op == ariane_pkg::BUF4) begin
       if(rd_clobber_gpr_i[rs4_o] != NONE)begin
           if(rs4_valid_i) forward_rs4 = 1'b1;
           else stall = 1'b1;
@@ -264,8 +264,8 @@ module issue_read_operands
     end
   end
 
-  // third operand from fp regfile or gp regfile if NR_RGPR_PORTS == 5
-  if (CVA6Cfg.NrRgprPorts == 5) begin : gen_gp_rs3 //modification 3 -> 5
+  // modification: third operand from the FP regfile or GP regfile when NR_RGPR_PORTS == 5.
+  if (CVA6Cfg.NrRgprPorts == 5) begin : gen_gp_rs3
       assign imm_forward_rs3 = rs3_i;
   end else begin : gen_fp_rs3
       assign imm_forward_rs3 = {{riscv::XLEN-CVA6Cfg.FLen{1'b0}}, rs3_i};
@@ -281,7 +281,7 @@ module issue_read_operands
     operand_e_n = operand_e_regfile;
     // immediates are the third operands in the store case
     // for FP operations, the imm field can also be the third operand from the regfile
-    if (CVA6Cfg.NrRgprPorts == 5) begin//modification 3 -> 5
+    if (CVA6Cfg.NrRgprPorts == 5) begin
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} :
           (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC16BUF) ? operand_c_regfile : issue_instr_i.result; //modification : ajout MAC16BUF
@@ -308,7 +308,7 @@ module issue_read_operands
     if (forward_rs4) begin
       operand_d_n = rs4_i;
     end
-//modification
+
     if (forward_rs5) begin
       operand_e_n = rs5_i;
     end
@@ -611,8 +611,8 @@ module issue_read_operands
       issue_instr_i.op
   )) ? {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, fprdata[1]} : rdata[1];
   assign operand_c_regfile = (CVA6Cfg.NrRgprPorts == 5) ? ((CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ? operand_c_fpr : operand_c_gpr) : operand_c_fpr;
-//modification :fpr or gpr, here we use gpr as the 3rd operand for MAC8EX, so we need to check if it is MAC8EX or not
-  assign operand_d_regfile = (CVA6Cfg.NrRgprPorts == 5) ? rdata[3] : 0; //to connect rdata[3] for MAC8EX, which is rs4, to operand_d_regfile
+  // modification: use the GP regfile for the extra operand paths when five register ports are enabled.
+  assign operand_d_regfile = (CVA6Cfg.NrRgprPorts == 5) ? rdata[3] : 0; // Connect rdata[3] (rs4) to operand_d_regfile.
   assign operand_e_regfile = (CVA6Cfg.NrRgprPorts == 5) ? rdata[4] : 0;
 
 

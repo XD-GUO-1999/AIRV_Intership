@@ -24,7 +24,7 @@ sltiu   rd rs1 imm12           14..12=3 6..2=0x04 1..0=3
 xori    rd rs1 imm12           14..12=4 6..2=0x04 1..0=3
 ori     rd rs1 imm12           14..12=6 6..2=0x04 1..0=3
 andi    rd rs1 imm12           14..12=7 6..2=0x04 1..0=3
-#modification
+#modification define the new instructions for the MAC16 buffer
 mac16buf  6..2=0x02 1..0=3
 buf4 6..2=0x0A 1..0=3
 #modification
