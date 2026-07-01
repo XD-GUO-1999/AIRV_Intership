@@ -183,9 +183,9 @@ module issue_read_operands
     forward_rs1 = 1'b0;
     forward_rs2 = 1'b0;
     forward_rs3 = 1'b0;  // FPR only
-    //modification
-    forward_rs4 = 1'b0;  
-    forward_rs5 = 1'b0;  
+    // modification: initialize extra forwarding signals for MAC16BUF/BUF4
+    forward_rs4 = 1'b0;
+    forward_rs5 = 1'b0;
     //
     // poll the scoreboard for those values
     rs1_o = issue_instr_i.rs1;
@@ -240,7 +240,7 @@ module issue_read_operands
     if ((CVA6Cfg.FpPresent && is_imm_fpr(
             issue_instr_i.op
         )) ? rd_clobber_fpr_i[issue_instr_i.result[REG_ADDR_SIZE-1:0]] != NONE :
-        //modification
+        // modification: include MAC16BUF when five gp register ports are available
             (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC16BUF ) && CVA6Cfg.NrRgprPorts == 5 ?
             rd_clobber_gpr_i[(issue_instr_i.op == ariane_pkg::MAC16BUF) ? issue_instr_i.rd[REG_ADDR_SIZE-1:0] : issue_instr_i.result[REG_ADDR_SIZE-1:0]] != NONE : 0) begin
         // modification: for MAC16BUF and OFFLOAD, check whether the third operand is available.
@@ -264,7 +264,7 @@ module issue_read_operands
     end
   end
 
-  // modification: third operand from the FP regfile or GP regfile when NR_RGPR_PORTS == 5.
+  // modification: third operand comes from the GP regfile when NR_RGPR_PORTS == 5, otherwise from FP regfile
   if (CVA6Cfg.NrRgprPorts == 5) begin : gen_gp_rs3
       assign imm_forward_rs3 = rs3_i;
   end else begin : gen_fp_rs3
@@ -276,7 +276,7 @@ module issue_read_operands
     // default is regfiles (gpr or fpr)
     operand_a_n = operand_a_regfile;
     operand_b_n = operand_b_regfile;
-    //modification 
+    // modification: include extra operand sources in the forwarding/selection mux
     operand_d_n = operand_d_regfile;
     operand_e_n = operand_e_regfile;
     // immediates are the third operands in the store case
@@ -284,7 +284,7 @@ module issue_read_operands
     if (CVA6Cfg.NrRgprPorts == 5) begin
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} :
-          (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC16BUF) ? operand_c_regfile : issue_instr_i.result; //modification : ajout MAC16BUF
+          (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC16BUF) ? operand_c_regfile : issue_instr_i.result; // modification: support MAC16BUF compressed immediate selection
     end else begin
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} : issue_instr_i.result;
@@ -304,7 +304,7 @@ module issue_read_operands
     if (forward_rs3) begin
       imm_n = imm_forward_rs3;
     end
-//modification
+    // modification: forward extra source operands when available
     if (forward_rs4) begin
       operand_d_n = rs4_i;
     end
@@ -491,7 +491,7 @@ module issue_read_operands
   logic [CVA6Cfg.NrCommitPorts-1:0][riscv::XLEN-1:0] wdata_pack;
   logic [CVA6Cfg.NrCommitPorts-1:0]                  we_pack;
 
-  if (CVA6Cfg.NrRgprPorts == 5) begin : gen_rs3 //modification
+  if (CVA6Cfg.NrRgprPorts == 5) begin : gen_rs3 // modification: use 5 read ports for MAC16BUF/BUF4
   assign raddr_pack = {
         (issue_instr_i.op == ariane_pkg::MAC16BUF || issue_instr_i.op == ariane_pkg::BUF4) ? issue_instr_i.result[9:5] : 5'd0, // modification: if we use MAC16BUF, the 4th and 5th port will read x28 and x29 as rs4 and rs5, otherwise they read x0
         (issue_instr_i.op == ariane_pkg::MAC16BUF || issue_instr_i.op == ariane_pkg::BUF4) ? issue_instr_i.result[4:0] : 5'd0, // important; here we apply as rs5 rs4 rs3 rs2 rs1, the order is important
@@ -500,7 +500,7 @@ module issue_read_operands
         issue_instr_i.rs1[4:0]  // Port 1: rs1
   };
   end else if (CVA6Cfg.NrRgprPorts == 3) begin : gen_rs3
-    assign raddr_pack = (issue_instr_i.op == ariane_pkg::MAC16BUF) ? //modification if we use MAC16BUF, the 3rd port should read rd to load rs3
+    assign raddr_pack = (issue_instr_i.op == ariane_pkg::MAC16BUF) ? // modification: if MAC16BUF, port 3 reads rd to load rs3
                         {issue_instr_i.rd[4:0], issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]} :
                         {issue_instr_i.result[4:0], issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]};
   end else begin : gen_no_rs3
@@ -623,7 +623,7 @@ module issue_read_operands
     if (!rst_ni) begin
       operand_a_q           <= '{default: 0};
       operand_b_q           <= '{default: 0};
-      //modification
+      // modification: reset extra operands in pipeline registers
       operand_d_q           <= '{default: 0};
       operand_e_q           <= '{default: 0};
 
@@ -637,7 +637,7 @@ module issue_read_operands
     end else begin
       operand_a_q           <= operand_a_n;
       operand_b_q           <= operand_b_n;
-      //modification : send
+      // modification: pipeline extra operands to the next stage
       operand_d_q           <= operand_d_n;
       operand_e_q           <= operand_e_n;
 
@@ -653,7 +653,7 @@ module issue_read_operands
 
   //pragma translate_off
   initial begin
-    assert (CVA6Cfg.NrRgprPorts == 2 || CVA6Cfg.NrRgprPorts == 3 || CVA6Cfg.NrRgprPorts == 5) //&& CVA6Cfg.CvxifEn)) //modification
+    assert (CVA6Cfg.NrRgprPorts == 2 || CVA6Cfg.NrRgprPorts == 3 || CVA6Cfg.NrRgprPorts == 5) //&& CVA6Cfg.CvxifEn)) // modification: keep supported regfile read port configurations
     else
       $fatal(
           1,

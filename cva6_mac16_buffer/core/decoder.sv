@@ -1186,29 +1186,28 @@ module decoder
           instruction_o.fu      = ALU;
           instruction_o.rd[4:0] = instr.utype.rd;
         end
-// ↓↓↓ Modification ↓↓↓
-        // Custom instruction DOT8 (Opcode: 0001011)
-        7'b0001011: begin 
-          imm_select             = RS3; //modification: use RS3 to fetch the accumulator
-          instruction_o.fu       = CVXIF;            // Dispatch the task to the Multiplier unit
-          instruction_o.rs1[4:0] = instruction_i[16:12]; // Extract source register 1 (t1)
-          instruction_o.rs2[4:0] = instruction_i[21:17]; // Extract source register 2 (t2)
-          instruction_o.rd[4:0]  = instr.rtype.rd;  // Extract destination register (sum)
-          instruction_o.op = ariane_pkg::MAC16BUF;  // Attach the DOT8 label we registered in ariane_pkg
-          //instruction_o.result = {54'b0, instruction_i[31:27], instruction_i[26:22]}; // Pass the 5-bit immediate (which contains the shift amount) in the upper bits of the result field, zero-extend to 64 bits
-          end
-        
-          7'b0101011: begin 
-          imm_select             = RS3; //modification: use RS3 to fetch the accumulator
-          instruction_o.fu       = CVXIF;            // Dispatch the task to the Multiplier unit
-          instruction_o.rs1[4:0] = instruction_i[16:12]; // Extract source register 1 (t1)
-          instruction_o.rs2[4:0] = instruction_i[21:17]; // Extract source register 2 (t2)
-          instruction_o.rd[4:0]  = instr.rtype.rd;  // Extract destination register (sum)
-          instruction_o.op = ariane_pkg::BUF4;  // Attach the DOT8 label we registered in ariane_pkg
-          //instruction_o.result = {54'b0, instruction_i[31:27], instruction_i[26:22]}; // Pass the 5-bit immediate (which contains the shift amount) in the upper bits of the result field, zero-extend to 64 bits
-          end
+// modification: custom MAC16BUF/BUF4 instruction decoding
+        7'b0001011: begin
+          imm_select             = RS3; // modification: use RS3 as the accumulator operand source
+          instruction_o.fu       = CVXIF;            // Dispatch to the accelerator interface
+          instruction_o.rs1[4:0] = instruction_i[16:12]; // Source register 1 (t1)
+          instruction_o.rs2[4:0] = instruction_i[21:17]; // Source register 2 (t2)
+          instruction_o.rd[4:0]  = instr.rtype.rd;      // Destination register (sum)
+          instruction_o.op       = ariane_pkg::MAC16BUF;  // Identify the MAC16BUF operation
+          //instruction_o.result = {54'b0, instruction_i[31:27], instruction_i[26:22]}; // Add immediate info if needed
+        end
 
-        // ↑↑↑ Modification ↑↑↑
+        7'b0101011: begin
+          imm_select             = RS3; // modification: use RS3 as the accumulator operand source
+          instruction_o.fu       = CVXIF;            // Dispatch to the accelerator interface
+          instruction_o.rs1[4:0] = instruction_i[16:12]; // Source register 1 (t1)
+          instruction_o.rs2[4:0] = instruction_i[21:17]; // Source register 2 (t2)
+          instruction_o.rd[4:0]  = instr.rtype.rd;      // Destination register (sum)
+          instruction_o.op       = ariane_pkg::BUF4;     // Identify the BUF4 operation
+          //instruction_o.result = {54'b0, instruction_i[31:27], instruction_i[26:22]}; // Add immediate info if needed
+        end
+
+        // modification: end custom MAC16BUF/BUF4 decode entries
         default: illegal_instr = 1'b1;
       endcase
     end
@@ -1288,13 +1287,13 @@ module decoder
         instruction_o.result  = imm_uj_type;
         instruction_o.use_imm = 1'b1;
       end
-      RS3: begin //modification: for instructions that use rs3 as an immediate (e.g., DOT8), 
-      //pass the value in the result field and set use_imm to 1 so the execution unit knows to use it as an immediate rather than a register value
+      RS3: begin // modification: RS3 is used as an immediate source for MAC16BUF/BUF4
+      // Pass the appropriate value in result; non-accelerator cases use the RS3 register address.
         if (instruction_o.op == ariane_pkg::MAC16BUF || instruction_o.op == ariane_pkg::BUF4) begin
-          instruction_o.result  = {{riscv::XLEN - 10{1'b0}}, instruction_i[31:27], instruction_i[26:22]}; // result holds the 10-bit immediate for MAC8EX
+          instruction_o.result  = {{riscv::XLEN - 10{1'b0}}, instruction_i[31:27], instruction_i[26:22]}; // Result holds the 10-bit immediate for MAC8EX
         end else begin
-        // result holds address of fp operand rs3
-        instruction_o.result  = {{riscv::XLEN - 5{1'b0}}, instr.r4type.rs3};
+          // Result holds address of FP operand RS3
+          instruction_o.result  = {{riscv::XLEN - 5{1'b0}}, instr.r4type.rs3};
         end
         instruction_o.use_imm = 1'b0;
       end
