@@ -1187,17 +1187,17 @@ module decoder
           instruction_o.rd[4:0] = instr.utype.rd;
         end
 // // ↓↓↓ Modification ↓↓↓
-        // Custom instruction DOT8 (Opcode: 0001011)
+        // Custom instruction MAC4 (Opcode: 0001011)
         7'b0001011: begin 
-          imm_select             = RS3; //modification: use RS3 to fetch the accumulator
+          imm_select             = RS3;             // use RS3 to fetch the accumulator
           instruction_o.fu       = CVXIF;            // Dispatch the task to the coprocessor unit
           instruction_o.rs1[4:0] = instr.rtype.rs1; // Extract source register 1 (t1)
           instruction_o.rs2[4:0] = instr.rtype.rs2; // Extract source register 2 (t2)
           instruction_o.rd[4:0]  = instr.rtype.rd;  // Extract destination register (sum)
 
-          // Check if funct3 is 000 as specified
+          // Check if funct3 is 001 as specified
           if (instr.rtype.funct3 == 3'b001) begin
-            instruction_o.op = ariane_pkg::MAC4;  // Attach the DOT8 label we registered in ariane_pkg
+            instruction_o.op = ariane_pkg::MAC4;  // Attach the MAC4  label we registered in ariane_pkg
           end else begin
             illegal_instr = 1'b1;                 // If funct3 is incorrect, trigger an illegal instruction exception
           end
@@ -1206,6 +1206,7 @@ module decoder
         default: illegal_instr = 1'b1;
       endcase
     end
+    
     if (CVA6Cfg.CvxifEn) begin
       if (is_illegal_i || illegal_instr) begin
         instruction_o.fu       = CVXIF;

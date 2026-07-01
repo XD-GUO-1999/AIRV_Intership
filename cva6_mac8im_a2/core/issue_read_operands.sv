@@ -133,7 +133,7 @@ module issue_read_operands
 
   assign fu_data_o.operand_a = operand_a_q;
   assign fu_data_o.operand_b = operand_b_q;
-  //modification : con
+  //modification :
   assign fu_data_o.operand_d = operand_d_q;
   assign fu_data_o.operand_e = operand_e_q;
   //

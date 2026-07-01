@@ -26,9 +26,8 @@ module mult
   logic div_valid_op;
   logic mul_valid_op;
   // Input Arbitration
-//modification
-  assign mul_valid_op = ~flush_i && mult_valid_i && (fu_data_i.operation inside { MUL, MULH, MULHU, MULHSU, MULW, CLMUL, CLMULH, CLMULR, ariane_pkg::MAC4 });
-//modofocation
+
+  assign mul_valid_op = ~flush_i && mult_valid_i && (fu_data_i.operation inside { MUL, MULH, MULHU, MULHSU, MULW, CLMUL, CLMULH, CLMULR });
   assign div_valid_op = ~flush_i && mult_valid_i && (fu_data_i.operation inside { DIV, DIVU, DIVW, DIVUW, REM, REMU, REMW, REMUW });
 
   // ---------------------
@@ -54,7 +53,6 @@ module mult
       .operation_i    (fu_data_i.operation),
       .operand_a_i    (fu_data_i.operand_a),
       .operand_b_i    (fu_data_i.operand_b),
-      .operand_c_i    (fu_data_i.imm), //modification use imm to store 3rd data
       .result_o       (mul_result),
       .mult_valid_i   (mul_valid_op),
       .mult_valid_o   (mul_valid),

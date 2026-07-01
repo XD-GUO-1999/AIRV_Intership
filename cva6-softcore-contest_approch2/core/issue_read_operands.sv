@@ -241,7 +241,7 @@ module issue_read_operands
     if (CVA6Cfg.NrRgprPorts == 3) begin
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} :
-          (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC4) ? operand_c_regfile : issue_instr_i.result; //modification : ajout MAC4
+          (issue_instr_i.op == OFFLOAD || issue_instr_i.op == ariane_pkg::MAC4) ? operand_c_regfile : issue_instr_i.result; //modification : add MAC4
     end else begin
       imm_n = (CVA6Cfg.FpPresent && is_imm_fpr(issue_instr_i.op)) ?
           {{riscv::XLEN - CVA6Cfg.FLen{1'b0}}, operand_c_regfile} : issue_instr_i.result;

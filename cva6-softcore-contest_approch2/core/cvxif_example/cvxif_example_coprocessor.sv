@@ -160,8 +160,8 @@ module cvxif_example_coprocessor
     p3 = $signed({1'b0, rs1_val[31:24]}) * $signed(rs2_val[31:24]);
     mac_result = acc_val + 32'(p0)+ 32'(p1)+ 32'(p2)+ 32'(p3); // we add the result togeter
 
-    //x_result_o.data    = req_o.req.rs[0] + req_o.req.rs[1] + (X_NUM_RS == 3 ? req_o.req.rs[2] : 0);
-    x_result_o.data = mac_result; //send the result back to CPU
+
+    x_result_o.data = mac_result; //modification : send the result back to CPU
     //x_result_valid_o   = (c == x_result_o.data[3:0]) && ~fifo_empty ? 1 : 0;
     x_result_valid_o   = ~fifo_empty ? 1 : 0;
     x_result_o.id      = req_o.req.id;

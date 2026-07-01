@@ -41,7 +41,7 @@ module scoreboard #(
     output rs3_len_t                                 rs3_o,
     output logic                                     rs3_valid_o,
 
-    //modification
+    //modification : add rs4 and rs5
     input  logic         [ariane_pkg::REG_ADDR_SIZE-1:0] rs4_i,
     output riscv::xlen_t                                 rs4_o,
     output logic                                         rs4_valid_o,
@@ -433,7 +433,7 @@ module scoreboard #(
       .idx_o  ()
   );
 
-  //modification
+  //modification: add tree for rs4 and rs5 to check the write back of rs4 and rs5
     rr_arb_tree #(
       .NumIn(NR_ENTRIES + CVA6Cfg.NrWbPorts),
       .DataWidth(riscv::XLEN),

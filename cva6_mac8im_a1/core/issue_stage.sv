@@ -113,7 +113,7 @@ module issue_stage
   logic              [   REG_ADDR_SIZE-1:0] rs3_iro_sb;
   rs3_len_t                                 rs3_sb_iro;
   logic                                     rs3_valid_iro_sb;
-  //modification :
+  //modification : add rs4 and rs5
   logic              [   REG_ADDR_SIZE-1:0] rs4_iro_sb;
   riscv::xlen_t                             rs4_sb_iro;
   logic                                     rs4_valid_iro_sb;
@@ -159,7 +159,7 @@ module issue_stage
       .rs3_i              (rs3_iro_sb),
       .rs3_o              (rs3_sb_iro),
       .rs3_valid_o        (rs3_valid_iro_sb),
-      //modification : 
+      //modification : add rs4 and rs5 input and output to check if we need forwording
       .rs4_i              (rs4_iro_sb),
       .rs4_o              (rs4_sb_iro),
       .rs4_valid_o        (rs4_valid_iro_sb),
@@ -211,7 +211,7 @@ module issue_stage
       .rs3_o              (rs3_iro_sb),
       .rs3_i              (rs3_sb_iro),
       .rs3_valid_i        (rs3_valid_iro_sb),
-      //modification :
+      //modification : add rs4 and rs5 input and output to check if we need forwording
       .rs4_o              (rs4_iro_sb),
       .rs4_i              (rs4_sb_iro),
       .rs4_valid_i        (rs4_valid_iro_sb),

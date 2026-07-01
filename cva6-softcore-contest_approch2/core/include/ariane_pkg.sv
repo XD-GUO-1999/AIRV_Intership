@@ -72,7 +72,7 @@ package ariane_pkg;
   localparam REG_ADDR_SIZE = 5;
 
   // Read ports for general purpose register files
-  localparam NR_RGPR_PORTS = 3; //modification from 2 to 3
+  localparam NR_RGPR_PORTS = 3; //modification from 2 to 3, because we need 3 operands for the MAC4 instruction
 
   // static debug hartinfo
   // debug causes
