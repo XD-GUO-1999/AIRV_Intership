@@ -80,6 +80,12 @@ module cvxif_example_coprocessor
       .x_issue_req_i (x_issue_req_i),
       .x_issue_resp_o(x_issue_resp_dec)
   );
+  //modification: add mode enum to konw if it is conv2 or fc1
+  typedef enum logic [1:0] { 
+    MODE_NORMAL = 2'd0,
+    MODE_CONV2_STORE = 2'd1,
+    MODE_FC1_READ = 2'd2
+  } mode_t;
 
   // modification: extend the issue entry with MAC16BUF/BUF4 block tracking flags
   typedef struct packed {
@@ -89,7 +95,17 @@ module cvxif_example_coprocessor
     logic          is_mac16buf;
     logic          is_first_block;
     logic          is_final_block;
+    mode_t         mode; //modification: add mode in the fifo
   } x_issue_t;
+
+
+  //modification add signal to contal mode, I use directly the number of block to contral
+  mode_t issue_mode_q;
+  logic issue_is_conv2_store;
+  logic issue_is_fc1_read;
+  assign issue_is_conv2_store = (issue_mode_q == MODE_CONV2_STORE);
+  assign issue_is_fc1_read = (issue_mode_q == MODE_FC1_READ);
+
 
   logic fifo_full, fifo_empty;
   logic x_issue_ready_q;
@@ -113,8 +129,8 @@ module cvxif_example_coprocessor
   assign issue_is_buf4          = (x_issue_req_i.instr[6:0] == 7'b0101011);
   assign issue_is_mac16buf      = (x_issue_req_i.instr[6:0] == 7'b0001011);
   assign issue_buf_active_blocks = x_issue_req_i.instr[11:7] + 5'd1;
-  assign issue_is_first_block   = (issue_block_cnt_q == 5'd0);
-  assign issue_is_final_block   = (issue_block_cnt_q == (issue_active_blocks_q - 5'd1));
+  assign issue_is_first_block   = issue_is_mac16buf && (issue_block_cnt_q == 5'd0);
+  assign issue_is_final_block   = issue_is_mac16buf && (issue_block_cnt_q == (issue_active_blocks_q - 5'd1));
 
   // Start from the table decoder response, then override only MAC16BUF.writeback.
   // A MAC16BUF is CPU-visible only for the final block of one output element.
@@ -124,7 +140,7 @@ module cvxif_example_coprocessor
   always_comb begin
     x_issue_resp_o = x_issue_resp_dec;
     if (issue_is_mac16buf && x_issue_resp_dec.accept) begin
-      x_issue_resp_o.writeback = issue_is_final_block;
+      x_issue_resp_o.writeback = issue_is_final_block && !issue_is_conv2_store; //modification: in the situation of conv2, we don't write back rd
     end
   end
 
@@ -140,16 +156,28 @@ module cvxif_example_coprocessor
   assign req_i.is_mac16buf    = issue_is_mac16buf;
   assign req_i.is_first_block = issue_is_first_block;
   assign req_i.is_final_block = issue_is_final_block;
+  assign req_i.mode           = issue_mode_q; //modificaiton: add mode in the fifo
 
   // modification: track issue-side buffer block counters for MAC16BUF/BUF4 execution
   always_ff @(posedge clk_i or negedge rst_ni) begin : issue_block_counter
     if (!rst_ni) begin
       issue_active_blocks_q <= 5'd1;
       issue_block_cnt_q     <= 5'd0;
+      issue_mode_q <= MODE_NORMAL;
     end else if (instr_push) begin
       if (issue_is_buf4) begin
         issue_active_blocks_q <= issue_buf_active_blocks;
         issue_block_cnt_q     <= 5'd0;
+
+        //modification: change mode accoding to blocks active
+        if (issue_buf_active_blocks == 25) begin
+          issue_mode_q <= MODE_CONV2_STORE;
+        end else if (issue_buf_active_blocks == 24)begin
+          issue_mode_q <= MODE_FC1_READ;
+        end else begin
+          issue_mode_q <= MODE_NORMAL;
+        end
+
       end else if (issue_is_mac16buf) begin
         if (issue_is_final_block) begin
           issue_block_cnt_q <= 5'd0;
@@ -203,7 +231,8 @@ module cvxif_example_coprocessor
   );
 
   localparam int unsigned  INPUT_BUF_WORDS = 100;  
-
+  localparam int unsigned  INPUT_BUF_WORDS = 100;  
+  
   logic signed [31:0] acc_q;
   logic signed [31:0] partial_sum;
   logic signed [31:0] mac_base_acc;
