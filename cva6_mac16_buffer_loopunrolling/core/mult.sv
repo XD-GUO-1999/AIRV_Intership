@@ -26,9 +26,7 @@ module mult
   logic div_valid_op;
   logic mul_valid_op;
   // Input Arbitration
-//modification
-  assign mul_valid_op = ~flush_i && mult_valid_i && (fu_data_i.operation inside { MUL, MULH, MULHU, MULHSU, MULW, CLMUL, CLMULH, CLMULR, ariane_pkg::MAC16BUF, ariane_pkg::BUF4});
-//modofocation
+  assign mul_valid_op = ~flush_i && mult_valid_i && (fu_data_i.operation inside { MUL, MULH, MULHU, MULHSU, MULW, CLMUL, CLMULH, CLMULR});
   assign div_valid_op = ~flush_i && mult_valid_i && (fu_data_i.operation inside { DIV, DIVU, DIVW, DIVUW, REM, REMU, REMW, REMUW });
 
   // ---------------------
@@ -46,17 +44,6 @@ module mult
   // Multiplication
   // ---------------------
 
-  //modification to debug
-  // always @(posedge clk_i) begin
-  //   if (mult_valid_i) begin
-  //     $display("DEBUG_CHECK: OpA=%h, OpB=%h, OpD=%h, OpE=%h, Imm=%h", 
-  //              fu_data_i.operand_a, 
-  //              fu_data_i.operand_b, 
-  //              fu_data_i.operand_d, 
-  //              fu_data_i.operand_e, 
-  //              fu_data_i.imm);
-  //   end
-  // end
   multiplier #(
       .CVA6Cfg(CVA6Cfg)
   ) i_multiplier (
@@ -66,11 +53,6 @@ module mult
       .operation_i    (fu_data_i.operation),
       .operand_a_i    (fu_data_i.operand_a),
       .operand_b_i    (fu_data_i.operand_b),
-      .operand_c_i    (fu_data_i.imm),//modification use imm to store 3rd data
-      //modification: add rs3 and rs4
-      .operand_d_i    (fu_data_i.operand_d),
-      .operand_e_i    (fu_data_i.operand_e),
-      ////
       .result_o       (mul_result),
       .mult_valid_i   (mul_valid_op),
       .mult_valid_o   (mul_valid),

@@ -232,33 +232,41 @@ static inline void mac16buf_first(const WDATA_T* __restrict weights,
 {
     int32_t sum = *weightedSum;
     const WDATA_T *p_wt = weights;
-
+    uint32_t w0, w1, w2, w3;
+ 
     asm volatile(
-        "lw t1, 0(%[p_wt]) \n\t"
-        "lw t2, 4(%[p_wt]) \n\t"
-        "lw t3, 8(%[p_wt]) \n\t"
-        "lw t4, 12(%[p_wt]) \n\t"
-        "mac16buf %[sum], t1, t2, t3, t4 \n\t"
-        : 
+        "lw %[w0], 0(%[p_wt]) \n\t"
+        "lw %[w1], 4(%[p_wt]) \n\t"
+        "lw %[w2], 8(%[p_wt]) \n\t"
+        "lw %[w3], 12(%[p_wt]) \n\t"
+        "mac16buf %[sum], %[w0], %[w1], %[w2], %[w3] \n\t"
+        : [w0] "=&r" (w0),
+          [w1] "=&r" (w1),
+          [w2] "=&r" (w2),
+          [w3] "=&r" (w3)
         : [sum] "r" (sum),
           [p_wt] "r" (p_wt)
-        : "t1", "t2", "t3", "t4", "cc", "memory"
+        : "cc", "memory"
     );
 }
 
 static inline void mac16buf_middle(const WDATA_T* __restrict weights)
 {
     const WDATA_T *p_wt = weights;
+    uint32_t w0, w1, w2, w3;
 
     asm volatile(
-        "lw t1, 0(%[p_wt]) \n\t"
-        "lw t2, 4(%[p_wt]) \n\t"
-        "lw t3, 8(%[p_wt]) \n\t"
-        "lw t4, 12(%[p_wt]) \n\t"
-        "mac16buf x0, t1, t2, t3, t4 \n\t"
-        :
+        "lw %[w0], 0(%[p_wt]) \n\t"
+        "lw %[w1], 4(%[p_wt]) \n\t"
+        "lw %[w2], 8(%[p_wt]) \n\t"
+        "lw %[w3], 12(%[p_wt]) \n\t"
+        "mac16buf x0, %[w0], %[w1], %[w2], %[w3] \n\t"
+        : [w0] "=&r" (w0),
+          [w1] "=&r" (w1),
+          [w2] "=&r" (w2),
+          [w3] "=&r" (w3)
         : [p_wt] "r" (p_wt)
-        : "t1", "t2", "t3", "t4", "cc", "memory"
+        : "cc", "memory"
     );
 }
 
@@ -266,38 +274,42 @@ static inline void mac16buf_middle(const WDATA_T* __restrict weights)
 static inline void mac16buf_middle4(const WDATA_T* __restrict weights)
 {
     const WDATA_T *p_wt = weights;
+    uint32_t w0, w1, w2, w3;
 
     asm volatile(
         // block 0: weights[0..15]
-        "lw t1, 0(%[p_wt]) \n\t"
-        "lw t2, 4(%[p_wt]) \n\t"
-        "lw t3, 8(%[p_wt]) \n\t"
-        "lw t4, 12(%[p_wt]) \n\t"
-        "mac16buf x0, t1, t2, t3, t4 \n\t"
+        "lw %[w0], 0(%[p_wt]) \n\t"
+        "lw %[w1], 4(%[p_wt]) \n\t"
+        "lw %[w2], 8(%[p_wt]) \n\t"
+        "lw %[w3], 12(%[p_wt]) \n\t"
+        "mac16buf x0, %[w0], %[w1], %[w2], %[w3] \n\t"
 
         // block 1: weights[16..31]
-        "lw t1, 16(%[p_wt]) \n\t"
-        "lw t2, 20(%[p_wt]) \n\t"
-        "lw t3, 24(%[p_wt]) \n\t"
-        "lw t4, 28(%[p_wt]) \n\t"
-        "mac16buf x0, t1, t2, t3, t4 \n\t"
+        "lw %[w0], 16(%[p_wt]) \n\t"
+        "lw %[w1], 20(%[p_wt]) \n\t"
+        "lw %[w2], 24(%[p_wt]) \n\t"
+        "lw %[w3], 28(%[p_wt]) \n\t"
+        "mac16buf x0, %[w0], %[w1], %[w2], %[w3] \n\t"
 
         // block 2: weights[32..47]
-        "lw t1, 32(%[p_wt]) \n\t"
-        "lw t2, 36(%[p_wt]) \n\t"
-        "lw t3, 40(%[p_wt]) \n\t"
-        "lw t4, 44(%[p_wt]) \n\t"
-        "mac16buf x0, t1, t2, t3, t4 \n\t"
+        "lw %[w0], 32(%[p_wt]) \n\t"
+        "lw %[w1], 36(%[p_wt]) \n\t"
+        "lw %[w2], 40(%[p_wt]) \n\t"
+        "lw %[w3], 44(%[p_wt]) \n\t"
+        "mac16buf x0, %[w0], %[w1], %[w2], %[w3] \n\t"
 
         // block 3: weights[48..63]
-        "lw t1, 48(%[p_wt]) \n\t"
-        "lw t2, 52(%[p_wt]) \n\t"
-        "lw t3, 56(%[p_wt]) \n\t"
-        "lw t4, 60(%[p_wt]) \n\t"
-        "mac16buf x0, t1, t2, t3, t4 \n\t"
-        :
+        "lw %[w0], 48(%[p_wt]) \n\t"
+        "lw %[w1], 52(%[p_wt]) \n\t"
+        "lw %[w2], 56(%[p_wt]) \n\t"
+        "lw %[w3], 60(%[p_wt]) \n\t"
+        "mac16buf x0, %[w0], %[w1], %[w2], %[w3] \n\t"
+        : [w0] "=&r" (w0),
+          [w1] "=&r" (w1),
+          [w2] "=&r" (w2),
+          [w3] "=&r" (w3)
         : [p_wt] "r" (p_wt)
-        : "t1", "t2", "t3", "t4", "cc", "memory"
+        : "cc", "memory"
     );
 }
 
@@ -308,16 +320,21 @@ static inline void mac16buf_final(const WDATA_T* __restrict weights,
 {
     int32_t sum;
     const WDATA_T *p_wt = weights;
+    uint32_t w0, w1, w2, w3;
 
     asm volatile(
-        "lw t1, 0(%[p_wt]) \n\t"
-        "lw t2, 4(%[p_wt]) \n\t"
-        "lw t3, 8(%[p_wt]) \n\t"
-        "lw t4, 12(%[p_wt]) \n\t"
-        "mac16buf %[sum], t1, t2, t3, t4 \n\t"
-        : [sum] "=r" (sum)
+        "lw %[w0], 0(%[p_wt]) \n\t"
+        "lw %[w1], 4(%[p_wt]) \n\t"
+        "lw %[w2], 8(%[p_wt]) \n\t"
+        "lw %[w3], 12(%[p_wt]) \n\t"
+        "mac16buf %[sum], %[w0], %[w1], %[w2], %[w3] \n\t"
+        : [sum] "=r" (sum),
+          [w0] "=&r" (w0),
+          [w1] "=&r" (w1),
+          [w2] "=&r" (w2),
+          [w3] "=&r" (w3)
         : [p_wt] "r" (p_wt)
-        : "t1", "t2", "t3", "t4", "cc", "memory"
+        : "cc", "memory"
     );
 
     *weightedSum = sum;
