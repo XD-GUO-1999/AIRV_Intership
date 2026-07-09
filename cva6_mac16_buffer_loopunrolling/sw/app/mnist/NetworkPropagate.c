@@ -127,18 +127,22 @@ static inline void buffer4_conv1_patch(
     const UDATA_T* __restrict row2,
     const UDATA_T* __restrict row3)
 {
+    uint32_t buf0, buf1, buf2, buf3;
     asm volatile(
-        "lw t1, 0(%[row0]) \n\t"
-        "lw t2, 0(%[row1]) \n\t"
-        "lw t3, 0(%[row2]) \n\t"
-        "lw t4, 0(%[row3]) \n\t"
-        "buf4 x0, t1, t2, t3, t4 \n\t"
-        :
+        "lw %[buf0], 0(%[row0]) \n\t"
+        "lw %[buf1], 0(%[row1]) \n\t"
+        "lw %[buf2], 0(%[row2]) \n\t"
+        "lw %[buf3], 0(%[row3]) \n\t"
+        "buf4 x0, %[buf0], %[buf1], %[buf2], %[buf3] \n\t"
+        : [buf0] "=&r" (buf0),
+          [buf1] "=&r" (buf1),
+          [buf2] "=&r" (buf2),
+          [buf3] "=&r" (buf3)
         : [row0] "r" (row0),
           [row1] "r" (row1),
           [row2] "r" (row2),
           [row3] "r" (row3)
-        : "t1", "t2", "t3", "t4", "cc", "memory"
+        : "cc", "memory"
     );
 }
 
@@ -149,15 +153,19 @@ static inline void buffer4_conv1_patch(
 static inline void buffer4_contiguous16_conv2(const UDATA_T* __restrict inputs)
 {
     const UDATA_T *p_in = inputs;
+    uint32_t buf0, buf1, buf2, buf3;
     asm volatile(
-        "lw t1, 0(%[p_in]) \n\t"
-        "lw t2, 4(%[p_in]) \n\t"
-        "lw t3, 8(%[p_in]) \n\t"
-        "lw t4, 12(%[p_in]) \n\t"
-        "buf4 x24, t1, t2, t3, t4 \n\t"
-        :
+        "lw %[buf0], 0(%[p_in]) \n\t"
+        "lw %[buf1], 4(%[p_in]) \n\t"
+        "lw %[buf2], 8(%[p_in]) \n\t"
+        "lw %[buf3], 12(%[p_in]) \n\t"
+        "buf4 x24, %[buf0], %[buf1], %[buf2], %[buf3] \n\t"
+        : [buf0] "=&r" (buf0),
+          [buf1] "=&r" (buf1),
+          [buf2] "=&r" (buf2),
+          [buf3] "=&r" (buf3)
         : [p_in] "r" (p_in)
-        : "t1", "t2", "t3", "t4", "cc", "memory"
+        : "cc", "memory"
     );
 }
 
@@ -167,15 +175,19 @@ static inline void buffer4_contiguous16_conv2(const UDATA_T* __restrict inputs)
 static inline void buffer4_contiguous16_fc1(const UDATA_T* __restrict inputs)
 {
     const UDATA_T *p_in = inputs;
+    uint32_t buf0, buf1, buf2, buf3;
     asm volatile(
-        "lw t1, 0(%[p_in]) \n\t"
-        "lw t2, 4(%[p_in]) \n\t"
-        "lw t3, 8(%[p_in]) \n\t"
-        "lw t4, 12(%[p_in]) \n\t"
-        "buf4 x23, t1, t2, t3, t4 \n\t"
-        :
+        "lw %[buf0], 0(%[p_in]) \n\t"
+        "lw %[buf1], 4(%[p_in]) \n\t"
+        "lw %[buf2], 8(%[p_in]) \n\t"
+        "lw %[buf3], 12(%[p_in]) \n\t"
+        "buf4 x23, %[buf0], %[buf1], %[buf2], %[buf3] \n\t"
+        : [buf0] "=&r" (buf0),
+          [buf1] "=&r" (buf1),
+          [buf2] "=&r" (buf2),
+          [buf3] "=&r" (buf3)
         : [p_in] "r" (p_in)
-        : "t1", "t2", "t3", "t4", "cc", "memory"
+        : "cc", "memory"
     );
 }
 
@@ -187,15 +199,19 @@ static inline void buffer4_contiguous16_fc1(const UDATA_T* __restrict inputs)
 static inline void buffer4_contiguous16_fc2(const UDATA_T* __restrict inputs)
 {
     const UDATA_T *p_in = inputs;
+    uint32_t buf0, buf1, buf2, buf3;
     asm volatile(
-        "lw t1, 0(%[p_in]) \n\t"
-        "lw t2, 4(%[p_in]) \n\t"
-        "lw t3, 8(%[p_in]) \n\t"
-        "lw t4, 12(%[p_in]) \n\t"
-        "buf4 x8, t1, t2, t3, t4 \n\t"
-        :
+        "lw %[buf0], 0(%[p_in]) \n\t"
+        "lw %[buf1], 4(%[p_in]) \n\t"
+        "lw %[buf2], 8(%[p_in]) \n\t"
+        "lw %[buf3], 12(%[p_in]) \n\t"
+        "buf4 x8, %[buf0], %[buf1], %[buf2], %[buf3] \n\t"
+        : [buf0] "=&r" (buf0),
+          [buf1] "=&r" (buf1),
+          [buf2] "=&r" (buf2),
+          [buf3] "=&r" (buf3)
         : [p_in] "r" (p_in)
-        : "t1", "t2", "t3", "t4", "cc", "memory"
+        : "cc", "memory"
     );
 }
 
@@ -208,16 +224,20 @@ static inline void mac16buf_conv1(const WDATA_T* __restrict weights,
 {
     int32_t sum = *weightedSum;
     const WDATA_T *p_wt = weights;
-
+    uint32_t w0, w1, w2, w3;
     asm volatile(
-        "lw t1, 0(%[p_wt]) \n\t"
-        "lw t2, 4(%[p_wt]) \n\t"
-        "lw t3, 8(%[p_wt]) \n\t"
-        "lw t4, 12(%[p_wt]) \n\t"
-        "mac16buf %[sum], t1, t2, t3, t4 \n\t"
-        : [sum] "+r" (sum)
+        "lw %[w0], 0(%[p_wt]) \n\t"
+        "lw %[w1], 4(%[p_wt]) \n\t"
+        "lw %[w2], 8(%[p_wt]) \n\t"
+        "lw %[w3], 12(%[p_wt]) \n\t"
+        "mac16buf %[sum], %[w0], %[w1], %[w2], %[w3] \n\t"
+        : [w0] "=&r" (w0),
+          [w1] "=&r" (w1),
+          [w2] "=&r" (w2),
+          [w3] "=&r" (w3),
+          [sum] "+r" (sum)
         : [p_wt] "r" (p_wt)
-        : "t1", "t2", "t3", "t4", "cc", "memory"
+        : "cc", "memory"
     );
 
     *weightedSum = sum;
@@ -448,31 +468,24 @@ static void convcellPropagate1(
              * 如果遇到 padding、wrap 或 unaligned 地址，就回退到原始 scalar 逻辑。
              */
             bool patch_ok = ((ox & 1) == 0);
+            
             const UDATA_T* row0 = 0;
             const UDATA_T* row1 = 0;
             const UDATA_T* row2 = 0;
             const UDATA_T* row3 = 0;
 
-            if (KERNEL_HEIGHT == 4 && KERNEL_WIDTH == 4 && NB_CHANNELS == 1
-                && (sxMax - sxMin) == KERNEL_WIDTH
-                && (syMax - syMin) == KERNEL_HEIGHT)
-            {
-                const int iPos0 = ((sxMin + ix)
-                                + CHANNELS_WIDTH * (iy + syMin));
-                int iOffset0 = INPUT_MEM_STRIDE * iPos0;
 
-                if (INPUT_MEM_WRAP_SIZE > 0 && iOffset0 >= INPUT_MEM_CONT_SIZE) {
-                    iOffset0 += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-                              - INPUT_MEM_CONT_SIZE;
-                }
+            const int iPos0 = ((sxMin + ix)
+                            + CHANNELS_WIDTH * (iy + syMin));
+            int iOffset0 = INPUT_MEM_STRIDE * iPos0;
 
-                const int row_stride = CHANNELS_WIDTH * INPUT_MEM_STRIDE;
+            const int row_stride = CHANNELS_WIDTH * INPUT_MEM_STRIDE;
 
-                row0 = inputs + iOffset0;
-                row1 = inputs + iOffset0 + row_stride;
-                row2 = inputs + iOffset0 + 2 * row_stride;
-                row3 = inputs + iOffset0 + 3 * row_stride;
-            }
+            row0 = inputs + iOffset0;
+            row1 = inputs + iOffset0 + row_stride;
+            row2 = inputs + iOffset0 + 2 * row_stride;
+            row3 = inputs + iOffset0 + 3 * row_stride;
+            
 
             if (patch_ok) {
                 // buf4 x0: active_blocks = 1。这个 patch 会被所有 filters 复用。
@@ -517,21 +530,6 @@ static void convcellPropagate1(
                                         + CHANNELS_WIDTH * (iy + syMin + sy));
                         int iOffset = INPUT_MEM_STRIDE * iPos;
 
-                        bool wrapInRange = false;
-
-                        if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
-                            iOffset += INPUT_MEM_WRAP_OFFSET
-                                    - INPUT_MEM_CONT_OFFSET
-                                    - INPUT_MEM_CONT_SIZE;
-                        }
-                        else if (INPUT_MEM_WRAP_SIZE > 0
-                            && KERNEL_WIDTH > 1
-                            && CHANNELS_HEIGHT == 1
-                            && iOffset + KERNEL_WIDTH * NB_CHANNELS > INPUT_MEM_CONT_SIZE)
-                        {
-                            wrapInRange = true;
-                        }
-
                         /*
                         * 当前 kernel row 对应的 weight 起始位置。
                         * weight layout:
@@ -545,42 +543,13 @@ static void convcellPropagate1(
                         * Conv1 中 NB_CHANNELS = INPUT_MEM_STRIDE = 1，
                         * 所以正常情况下这里会成立。
                         */
-                        if (!wrapInRange && NB_CHANNELS == INPUT_MEM_STRIDE) {
+                        if (NB_CHANNELS == INPUT_MEM_STRIDE) {
                             macsOnRange_no_alined(
                                 inputs + iOffset,
                                 weights + wOffset,
                                 &weightedSum,
                                 KERNEL_WIDTH * NB_CHANNELS * 4
                             );
-                        }
-                        else {
-                            /*
-                            * 极端 fallback：
-                            * 如果这一行发生 wrap，或者 memory stride 不连续，
-                            * 才退回到 sx-by-sx。
-                            */
-                            for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
-                                if ((PADDING_X != 0 || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
-                                    && sx >= sxMax - sxMin)
-                                {
-                                    break;
-                                }
-
-                                int iOffsetInRange = iOffset + sx * INPUT_MEM_STRIDE;
-
-                                if (wrapInRange && iOffsetInRange >= INPUT_MEM_CONT_SIZE) {
-                                    iOffsetInRange += INPUT_MEM_WRAP_OFFSET
-                                                    - INPUT_MEM_CONT_OFFSET
-                                                    - INPUT_MEM_CONT_SIZE;
-                                }
-
-                                macsOnRange(
-                                    inputs + iOffsetInRange,
-                                    weights + wOffset + sx * NB_CHANNELS,
-                                    &weightedSum,
-                                    NB_CHANNELS
-                                );
-                            }
                         }
                     }
                 }
@@ -657,42 +626,10 @@ static void convcellPropagate2(
             const int oPos = (ox + OUTPUTS_WIDTH * oy);
             int oOffset = OUTPUT_MEM_STRIDE * oPos;
 
-            if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
-                oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
-                            - OUTPUT_MEM_CONT_SIZE;
-            }
-
-            /*
-             * 先检查这个 5x5x16 patch 是否能安全用 buffer：
-             *   1. 每个 pixel 的 16 channels 连续；
-             *   2. 每个 16-byte block 4-byte 对齐；
-             *   3. 没有跨 memory wrap 边界；
-             *   4. 当前 patch 没有被 padding 截断。
-             *
-             * 检查通过后才真正执行 buf4，避免写了一半 buffer 又 fallback，
-             * 导致硬件 write counter 错位。
-             */
-                for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
-                    for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
-                        const int iPos = ((sxMin + sx + ix)
-                                        + CHANNELS_WIDTH * (iy + syMin + sy));
-                        int iOffset = INPUT_MEM_STRIDE * iPos;
-
-                        if (INPUT_MEM_WRAP_SIZE > 0
-                            && iOffset + NB_CHANNELS > INPUT_MEM_CONT_SIZE)
-                        {
-                            break;
-                        }
-
-                        if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
-                            iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-                                      - INPUT_MEM_CONT_SIZE;
-                        }
-
-                        const UDATA_T* in_ptr = inputs + iOffset;
-                    }
-                }
-
+            // if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
+            //     oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
+            //                 - OUTPUT_MEM_CONT_SIZE;
+            // }
                 /*
                  * 填满完整 Conv2 patch。
                  * 连续 25 次 buf4 x24：
@@ -705,10 +642,10 @@ static void convcellPropagate2(
                                         + CHANNELS_WIDTH * (iy + syMin + sy));
                         int iOffset = INPUT_MEM_STRIDE * iPos;
 
-                        if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
-                            iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-                                      - INPUT_MEM_CONT_SIZE;
-                        }
+                        // if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
+                        //     iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
+                        //               - INPUT_MEM_CONT_SIZE;
+                        // }
 
                         buffer4_contiguous16_conv2(inputs + iOffset);
                     }
@@ -826,11 +763,6 @@ static void fccellPropagateUDATA_T(
 
         return;
 
-
-    /*
-     * 原始 fallback：
-     * 用于非 FC1、非连续布局、或不对齐情况。
-     */
 }
 
 static void fccellPropagateDATA_T(
@@ -907,65 +839,6 @@ static void fccellPropagateDATA_T(
     return;
 }
 
-
-//     /*
-//      * 原始 fallback：
-//      * 用于非 FC2、非连续布局、或不对齐情况。
-//      */
-//     for (int och = 0; och < NB_OUTPUTS; och++) {
-//         SUM_T weightedSum = biasses[och];
-
-//         for (int iy = 0; iy < CHANNELS_HEIGHT; ++iy) {
-//             const int iPos = (CHANNELS_WIDTH * iy);
-//             int iOffset = INPUT_MEM_STRIDE * iPos;
-
-//             bool wrapInRange = false;
-
-//             if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
-//                 iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-//                             - INPUT_MEM_CONT_SIZE;
-//             }
-//             else if (INPUT_MEM_WRAP_SIZE > 0 && CHANNELS_WIDTH > 1
-//                 && CHANNELS_HEIGHT == 1
-//                 && iOffset + CHANNELS_WIDTH * NB_CHANNELS
-//                     > INPUT_MEM_CONT_SIZE)
-//             {
-//                 wrapInRange = true;
-//             }
-
-//             const int wOffset = NB_CHANNELS * CHANNELS_WIDTH
-//                                     * (iy + CHANNELS_HEIGHT * och);
-
-//             if (!wrapInRange && INPUT_MEM_STRIDE == NB_CHANNELS) {
-//                 macsOnRange(
-//                     inputs + iOffset, 
-//                     weights + wOffset, 
-//                     &weightedSum, NB_CHANNELS * CHANNELS_WIDTH);
-//             }
-//             else {
-//                 for (int ix = 0; ix < CHANNELS_WIDTH; ++ix) {
-//                     int iOffsetInRange = iOffset + ix * INPUT_MEM_STRIDE;
-
-//                     if (wrapInRange
-//                         && iOffsetInRange >= INPUT_MEM_CONT_SIZE)
-//                     {
-//                         iOffsetInRange += INPUT_MEM_WRAP_OFFSET
-//                                     - INPUT_MEM_CONT_OFFSET
-//                                     - INPUT_MEM_CONT_SIZE;
-//                     }
-
-//                     macsOnRange(
-//                         inputs + iOffsetInRange, 
-//                         weights + wOffset + ix * NB_CHANNELS, 
-//                         &weightedSum, NB_CHANNELS);
-//                 }
-//             }
-//         }
-
-//         outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
-//     }
-// }
-
 static void maxPropagate1(
     const DATA_T* __restrict inputs,
     int32_t* __restrict outputs,
@@ -987,10 +860,10 @@ static void maxPropagate1(
             const int oPos = (ix + INPUTS_WIDTH * iy);
             int iOffset = INPUT_MEM_STRIDE * oPos;
 
-            if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
-                iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-                            - INPUT_MEM_CONT_SIZE;
-            }
+            // if (INPUT_MEM_WRAP_SIZE > 0 && iOffset >= INPUT_MEM_CONT_SIZE) {
+            //     iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
+            //                 - INPUT_MEM_CONT_SIZE;
+            // }
 
             if (NB_CHANNELS > 1) {
                 for (int ch = 0; ch < NB_CHANNELS; ++ch) {
