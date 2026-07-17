@@ -110,7 +110,6 @@ module cvxif_example_coprocessor
   logic       issue_is_mac16buf;
   logic       issue_is_mac16buf_para; //add new instruction which can do both buffer and mac
   logic       issue_mac_op; //mac16buf and mac16buf_para
-  logic [4:0] issue_mac_active_blocks; //25 blocks for conv2
   logic       issue_is_first_block;
   logic       issue_is_final_block;
 
@@ -120,10 +119,9 @@ module cvxif_example_coprocessor
   assign issue_is_mac16buf_para = (x_issue_req_i.instr[6:0] == 7'b1011011);
 
   assign issue_mac_op = issue_is_mac16buf || issue_is_mac16buf_para;
-  assign issue_mac_active_blocks = issue_is_mac16buf_para ? 5'd25 : issue_active_blocks_q; //25 blocks for conv2, 1 block for mac16buf
   assign issue_buf_active_blocks = x_issue_req_i.instr[11:7] + 5'd1;
   assign issue_is_first_block   = issue_mac_op && (issue_block_cnt_q == 5'd0);
-  assign issue_is_final_block   = issue_mac_op && (issue_block_cnt_q == (issue_mac_active_blocks - 5'd1));
+  assign issue_is_final_block   = issue_mac_op && (issue_block_cnt_q == (issue_active_blocks_q - 5'd1));
 
   // Start from the table decoder response, then override only MAC16BUF.writeback.
   // A MAC16BUF is CPU-visible only for the final block of one output element.
@@ -161,10 +159,6 @@ module cvxif_example_coprocessor
         issue_active_blocks_q <= issue_buf_active_blocks;
         issue_block_cnt_q     <= 5'd0;
       end else if (issue_is_mac16buf || issue_is_mac16buf_para) begin
-        if (issue_is_mac16buf_para) begin
-          issue_active_blocks_q <= 5'd25; //25 blocks for conv2
-        end
-
         if (issue_is_final_block) begin
           issue_block_cnt_q <= 5'd0;
         end else begin
@@ -284,14 +278,12 @@ module cvxif_example_coprocessor
         end
       end else if (is_mac16buf_ex || is_mac16buf_para_ex) begin
         if (is_mac16buf_para_ex) begin
-          active_blocks_q <= 5'd25; //25 blocks for conv2
-
           input_buffer[wr_base + 0] <= req_o.req.rs[5];
           input_buffer[wr_base + 1] <= req_o.req.rs[6];
           input_buffer[wr_base + 2] <= req_o.req.rs[7];
           input_buffer[wr_base + 3] <= req_o.req.rs[8];
 
-          if(wr_block_sel == 5'd24) begin
+          if(req_o.is_final_block) begin
             wr_block_cnt_q <= 5'd0;
           end else begin
             wr_block_cnt_q <= wr_block_sel + 5'd1;

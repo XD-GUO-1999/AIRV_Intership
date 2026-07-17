@@ -6,7 +6,9 @@
 
 # Project root
 #export PROJECTROOT=/home/imtuser/AIRV/cva6-softcore-contest
-export PROJECTROOT=/home/imtuser/AIRV/cva6_mac16_buffer
+#export PROJECTROOT=/home/imtuser/AIRV/cva6_mac16_wtbuffer
+export PROJECTROOT=/home/imtuser/AIRV/cva6_mac16_parallel
+
 
 # =========================
 # Vivado / Vitis 2024.1
