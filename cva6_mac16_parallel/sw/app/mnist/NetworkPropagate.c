@@ -178,32 +178,6 @@ static inline void buffer4_setmode_fc2(void)
 }
 
 
-static inline void buffer4_conv1_patch(
-    const UDATA_T* __restrict row0,
-    const UDATA_T* __restrict row1,
-    const UDATA_T* __restrict row2,
-    const UDATA_T* __restrict row3)
-{
-    uint32_t buf0, buf1, buf2, buf3;
-    asm volatile(
-        "lw %[buf0], 0(%[row0]) \n\t"
-        "lw %[buf1], 0(%[row1]) \n\t"
-        "lw %[buf2], 0(%[row2]) \n\t"
-        "lw %[buf3], 0(%[row3]) \n\t"
-        "buf4 x0, %[buf0], %[buf1], %[buf2], %[buf3] \n\t"
-        : [buf0] "=&r" (buf0),
-          [buf1] "=&r" (buf1),
-          [buf2] "=&r" (buf2),
-          [buf3] "=&r" (buf3)
-        : [row0] "r" (row0),
-          [row1] "r" (row1),
-          [row2] "r" (row2),
-          [row3] "r" (row3)
-        : "cc", "memory"
-    );
-}
-
-
 static inline void buffer4_contiguous16_fc2(const UDATA_T* __restrict inputs)
 {
     const UDATA_T *p_in = inputs;
@@ -226,49 +200,111 @@ static inline void buffer4_contiguous16_fc2(const UDATA_T* __restrict inputs)
  * 这个函数假设：对应的 input block 已经在硬件 input buffer 中。
  * 硬件每执行一次 mac16buf，会根据 active_blocks 自动移动 read counter。
  */
-static inline void mac16buf_para_conv1_only(
-    const UDATA_T* __restrict input0,
-    const UDATA_T* __restrict input1,
-    const UDATA_T* __restrict input2,
-    const UDATA_T* __restrict input3,
+static inline __attribute__((always_inline))
+SUM_T mac16buf_para_conv1_aligned(
+    const UDATA_T* __restrict row0,
+    const UDATA_T* __restrict row1,
+    const UDATA_T* __restrict row2,
+    const UDATA_T* __restrict row3,
     const WDATA_T* __restrict weights,
-    SUM_T* __restrict weightedSum)
+    SUM_T initial_sum)
 {
-    int32_t sum = *weightedSum;
-    const WDATA_T *p_wt = weights;
+    SUM_T sum = initial_sum;
     uint32_t w0, w1, w2, w3;
 
     asm volatile(
-        // load 4 weight words = 16 weights
-        "lw %[w0], 0(%[p_wt]) \n\t"
-        "lw %[w1], 4(%[p_wt]) \n\t"
-        "lw %[w2], 8(%[p_wt]) \n\t"
-        "lw %[w3], 12(%[p_wt]) \n\t"
+        "lw %[w0],  0(%[p_wt])\n\t"
+        "lw %[w1],  4(%[p_wt])\n\t"
+        "lw %[w2],  8(%[p_wt])\n\t"
+        "lw %[w3], 12(%[p_wt])\n\t"
 
-        // Conv1 input patch = 4 rows × 4 bytes
-        // t3=x28, t4=x29, t5=x30, t6=x31
-        "lw t3, 0(%[input0]) \n\t"
-        "lw t4, 0(%[input1]) \n\t"
-        "lw t5, 0(%[input2]) \n\t"
-        "lw t6, 0(%[input3]) \n\t"
+        "lw t3, 0(%[row0])\n\t"
+        "lw t4, 0(%[row1])\n\t"
+        "lw t5, 0(%[row2])\n\t"
+        "lw t6, 0(%[row3])\n\t"
 
-        // active_blocks=1 时，这条指令同时 first + final
-        "mac16buf_para %[sum], %[w0], %[w1], %[w2], %[w3] \n\t"
+        /*
+         * active_blocks = 1:
+         * 这条指令既是first也是final。
+         * 同时计算output0并将input写入buffer。
+         */
+        "mac16buf_para %[sum], %[w0], %[w1], %[w2], %[w3]\n\t"
 
-        : [sum] "+r" (sum),
-          [w0] "=&r" (w0),
-          [w1] "=&r" (w1),
-          [w2] "=&r" (w2),
-          [w3] "=&r" (w3)
-        : [input0] "r" (input0),
-          [input1] "r" (input1),
-          [input2] "r" (input2),
-          [input3] "r" (input3),
-          [p_wt] "r" (p_wt)
-        : "t3", "t4", "t5", "t6", "cc", "memory"
+        : [sum] "+r"(sum),
+          [w0] "=&r"(w0),
+          [w1] "=&r"(w1),
+          [w2] "=&r"(w2),
+          [w3] "=&r"(w3)
+        : [row0] "r"(row0),
+          [row1] "r"(row1),
+          [row2] "r"(row2),
+          [row3] "r"(row3),
+          [p_wt] "r"(weights)
+        : "t3", "t4", "t5", "t6", "memory"
     );
 
-    *weightedSum = sum;
+    return sum;
+}
+
+
+static inline __attribute__((always_inline))
+SUM_T mac16buf_para_conv1_unaligned2(
+    const UDATA_T* __restrict row0,
+    const UDATA_T* __restrict row1,
+    const UDATA_T* __restrict row2,
+    const UDATA_T* __restrict row3,
+    const WDATA_T* __restrict weights,
+    SUM_T initial_sum)
+{
+    SUM_T sum = initial_sum;
+    uint32_t w0, w1, w2, w3;
+
+    asm volatile(
+        "lw %[w0],  0(%[p_wt])\n\t"
+        "lw %[w1],  4(%[p_wt])\n\t"
+        "lw %[w2],  8(%[p_wt])\n\t"
+        "lw %[w3], 12(%[p_wt])\n\t"
+
+        /* row0: 拼出连续4 bytes */
+        "lhu t3, 0(%[row0])\n\t"
+        "lhu t0, 2(%[row0])\n\t"
+        "slli t0, t0, 16\n\t"
+        "or   t3, t3, t0\n\t"
+
+        /* row1 */
+        "lhu t4, 0(%[row1])\n\t"
+        "lhu t0, 2(%[row1])\n\t"
+        "slli t0, t0, 16\n\t"
+        "or   t4, t4, t0\n\t"
+
+        /* row2 */
+        "lhu t5, 0(%[row2])\n\t"
+        "lhu t0, 2(%[row2])\n\t"
+        "slli t0, t0, 16\n\t"
+        "or   t5, t5, t0\n\t"
+
+        /* row3 */
+        "lhu t6, 0(%[row3])\n\t"
+        "lhu t0, 2(%[row3])\n\t"
+        "slli t0, t0, 16\n\t"
+        "or   t6, t6, t0\n\t"
+
+        "mac16buf_para %[sum], %[w0], %[w1], %[w2], %[w3]\n\t"
+
+        : [sum] "+r"(sum),
+          [w0] "=&r"(w0),
+          [w1] "=&r"(w1),
+          [w2] "=&r"(w2),
+          [w3] "=&r"(w3)
+        : [row0] "r"(row0),
+          [row1] "r"(row1),
+          [row2] "r"(row2),
+          [row3] "r"(row3),
+          [p_wt] "r"(weights)
+        : "t0", "t3", "t4", "t5", "t6", "memory"
+    );
+
+    return sum;
 }
 
 
@@ -554,298 +590,303 @@ static void convcellPropagate1(
     const BDATA_T* __restrict biasses,
     const WDATA_T* __restrict weights,
     int rescaling,
-    int NB_CHANNELS, 
-    int CHANNELS_HEIGHT, int CHANNELS_WIDTH,
+    int NB_CHANNELS,
+    int CHANNELS_HEIGHT,
+    int CHANNELS_WIDTH,
     int NB_OUTPUTS,
-    int OUTPUTS_HEIGHT, int OUTPUTS_WIDTH,
-    int PADDING_Y, int PADDING_X,
-    int STRIDE_Y, int STRIDE_X,
-    int KERNEL_HEIGHT, int KERNEL_WIDTH,
+    int OUTPUTS_HEIGHT,
+    int OUTPUTS_WIDTH,
+    int PADDING_Y,
+    int PADDING_X,
+    int STRIDE_Y,
+    int STRIDE_X,
+    int KERNEL_HEIGHT,
+    int KERNEL_WIDTH,
     ActivationFunction_T ACTIVATION,
-    // Memory mapping: inputs
+
+    /*
+     * Input memory mapping。
+     */
     int INPUT_MEM_CONT_OFFSET,
     int INPUT_MEM_CONT_SIZE,
     int INPUT_MEM_WRAP_OFFSET,
     int INPUT_MEM_WRAP_SIZE,
     int INPUT_MEM_STRIDE,
-    // Memory mapping: outputs
+
+    /*
+     * Output memory mapping。
+     */
     int OUTPUT_MEM_CONT_OFFSET,
     int OUTPUT_MEM_CONT_SIZE,
     int OUTPUT_MEM_WRAP_OFFSET,
     int OUTPUT_MEM_WRAP_SIZE,
     int OUTPUT_MEM_STRIDE)
-// {
-//     int OUTPUTS_HEIGHT_NOPAD
-//         = (CHANNELS_HEIGHT - KERNEL_HEIGHT + STRIDE_Y) / STRIDE_Y;
-//     int OUTPUTS_WIDTH_NOPAD
-//         = (CHANNELS_WIDTH - KERNEL_WIDTH + STRIDE_X) / STRIDE_X;
-
-//     buffer4_setmode_conv1();
-
-//     /*
-//      * Conv1 的 buffer 策略：
-//      *   - Conv1 kernel = 4x4x1 = 16 byte = 1 个 block。
-//      *   - 对同一个 output pixel (ox, oy)，input patch 对所有 output filters 都一样。
-//      *   - 所以 buffer4 应该放在 output 循环外面：一个 patch 只 buffer 一次。
-//      *   - 后续每个 output filter 只换 weight，然后执行 mac16buf。
-//      */
-
-//     for (int oy = 0; oy < OUTPUTS_HEIGHT; ++oy) {
-//         const int syMin = (PADDING_Y == 0) ? 0
-//             : max(PADDING_Y - (oy * STRIDE_Y), 0);
-//         const int syMax = (PADDING_Y == 0
-//                 && OUTPUTS_HEIGHT == OUTPUTS_HEIGHT_NOPAD) ? KERNEL_HEIGHT
-//             : clamp(CHANNELS_HEIGHT + PADDING_Y - (oy * STRIDE_Y),
-//                     0, KERNEL_HEIGHT);
-//         const int iy = (oy * STRIDE_Y) - PADDING_Y;
-
-//         for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
-//             const int sxMin = (PADDING_X == 0) ? 0
-//                 : max(PADDING_X - (ox * STRIDE_X), 0);
-//             const int sxMax = (PADDING_X == 0
-//                     && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
-//                         ? KERNEL_WIDTH
-//                 : clamp(CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_X),
-//                         0, KERNEL_WIDTH);
-//             const int ix = (ox * STRIDE_X) - PADDING_X;
-
-//             const int oPos = (ox + OUTPUTS_WIDTH * oy);
-//             int oOffset = OUTPUT_MEM_STRIDE * oPos;
-
-//             if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
-//                 oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
-//                             - OUTPUT_MEM_CONT_SIZE;
-//             }
-
-//             /*
-//              * 只有完整 4x4x1 patch 且地址 4-byte 对齐时，才走 input buffer。
-//              * 如果遇到 padding、wrap 或 unaligned 地址，就回退到原始 scalar 逻辑。
-//              */
-//             bool patch_ok = ((ox & 1) == 0);
-            
-//             const UDATA_T* row0 = 0;
-//             const UDATA_T* row1 = 0;
-//             const UDATA_T* row2 = 0;
-//             const UDATA_T* row3 = 0;
-
-
-//             const int iPos0 = ((sxMin + ix)
-//                             + CHANNELS_WIDTH * (iy + syMin));
-//             int iOffset0 = INPUT_MEM_STRIDE * iPos0;
-
-//             const int row_stride = CHANNELS_WIDTH * INPUT_MEM_STRIDE;
-
-//             row0 = inputs + iOffset0;
-//             row1 = inputs + iOffset0 + row_stride;
-//             row2 = inputs + iOffset0 + 2 * row_stride;
-//             row3 = inputs + iOffset0 + 3 * row_stride;
-            
-//             for (int output = 0; output < NB_OUTPUTS; ++output) {
-//                 SUM_T weightedSum = biasses[output];
-
-//                 if (patch_ok) {
-//                     /*
-//                      * Conv1 一个 filter 的 16 个 weight 连续存放。
-//                      * input 已经在 buffer 的 block0 里，所以这里只需要换 weight。
-//                      */
-//                     const int wOffset = NB_CHANNELS * (sxMin
-//                         + KERNEL_WIDTH * (syMin + KERNEL_HEIGHT * output));
-//                     if (output == 0){
-//                         mac16buf_para_conv1_only(row0, row1, row2, row3, weights + wOffset, &weightedSum);
-//                     } else {
-//                         mac16buf_conv1(weights + wOffset, &weightedSum);
-//                     }
-//                 }
-//                 else {
-//                     /*
-//                     * 安全回退路径：保持原始卷积语义。
-//                     * 但这里不再一个 sx 一个 sx 地处理，而是优先一整行一整行处理。
-//                     *
-//                     * 对 Conv1 来说：
-//                     *   KERNEL_WIDTH = 4
-//                     *   NB_CHANNELS = 1
-//                     *   所以一行 = 4 个 input = 4 个 MAC
-//                     */
-//                     for (int sy = 0; sy <= KERNEL_HEIGHT - 4; sy += 4) {
-//                         if ((PADDING_Y != 0 || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
-//                             && sy >= syMax - syMin)
-//                         {
-//                             break;
-//                         }
-
-//                         /*
-//                         * 当前 kernel row 对应的 input 起始位置。
-//                         * 注意这里从 sxMin 开始，所以如果有 padding，左边无效部分会被跳过。
-//                         */
-//                         const int iPos = ((sxMin + ix)
-//                                         + CHANNELS_WIDTH * (iy + syMin + sy));
-//                         int iOffset = INPUT_MEM_STRIDE * iPos;
-
-//                         /*
-//                         * 当前 kernel row 对应的 weight 起始位置。
-//                         * weight layout:
-//                         *   [output][sy][sx][channel]
-//                         */
-//                         const int wOffset = NB_CHANNELS * (sxMin
-//                             + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
-
-//                         /*
-//                         * 如果 input memory 中这一行是连续的，就整行处理。
-//                         * Conv1 中 NB_CHANNELS = INPUT_MEM_STRIDE = 1，
-//                         * 所以正常情况下这里会成立。
-//                         */
-//                         if (NB_CHANNELS == INPUT_MEM_STRIDE) {
-//                             macsOnRange_no_alined(
-//                                 inputs + iOffset,
-//                                 weights + wOffset,
-//                                 &weightedSum,
-//                                 KERNEL_WIDTH * NB_CHANNELS * 4
-//                             );
-//                         }
-//                     }
-//                 }
-
-//                 outputs[oOffset + output]
-//                     = sat(weightedSum, output, ACTIVATION, rescaling);
-//             }
-//         }
-//     }
-// }
-
 {
-    int OUTPUTS_HEIGHT_NOPAD
-        = (CHANNELS_HEIGHT - KERNEL_HEIGHT + STRIDE_Y) / STRIDE_Y;
-    int OUTPUTS_WIDTH_NOPAD
-        = (CHANNELS_WIDTH - KERNEL_WIDTH + STRIDE_X) / STRIDE_X;
-
     /*
-     * Conv1 的 buffer 策略：
-     *   - Conv1 kernel = 4x4x1 = 16 byte = 1 个 block。
-     *   - 对同一个 output pixel (ox, oy)，input patch 对所有 output filters 都一样。
-     *   - 所以 buffer4 应该放在 output 循环外面：一个 patch 只 buffer 一次。
-     *   - 后续每个 output filter 只换 weight，然后执行 mac16buf。
+     * 当前函数是针对当前固定Conv1配置的加速路径：
+     *
+     * NB_CHANNELS    = 1
+     * KERNEL_WIDTH   = 4
+     * KERNEL_HEIGHT  = 4
+     * STRIDE_X       = 2
+     * STRIDE_Y       = 2
+     * PADDING_X      = 0
+     * PADDING_Y      = 0
+     *
+     * 一个Conv1 kernel包含：
+     *
+     *   4 × 4 × 1 = 16 inputs
+     *
+     * 正好对应一条MAC16。
      */
 
+    /*
+     * 设置Conv1模式：
+     *
+     * buf4 x0 => active_blocks = 1。
+     *
+     * 这里只需要设置一次。
+     * 后面每个patch的output 0会通过mac16buf_para更新buffer内容。
+     */
+    buffer4_setmode_conv1();
+
+    /*
+     * 每个filter包含16个weights。
+     */
+    const int filter_size
+        = NB_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH;
+
+    /*
+     * 相邻input行之间的byte距离。
+     *
+     * 当前Conv1中：
+     *
+     * CHANNELS_WIDTH = 24
+     * INPUT_MEM_STRIDE = 1
+     *
+     * 因此row_stride = 24 bytes。
+     */
+    const int row_stride
+        = CHANNELS_WIDTH * INPUT_MEM_STRIDE;
+
     for (int oy = 0; oy < OUTPUTS_HEIGHT; ++oy) {
-        const int syMin = (PADDING_Y == 0) ? 0
-            : max(PADDING_Y - (oy * STRIDE_Y), 0);
-        const int syMax = (PADDING_Y == 0
-                && OUTPUTS_HEIGHT == OUTPUTS_HEIGHT_NOPAD) ? KERNEL_HEIGHT
-            : clamp(CHANNELS_HEIGHT + PADDING_Y - (oy * STRIDE_Y),
-                    0, KERNEL_HEIGHT);
-        const int iy = (oy * STRIDE_Y) - PADDING_Y;
+        /*
+         * 当前网络padding为0。
+         */
+        const int iy
+            = oy * STRIDE_Y - PADDING_Y;
 
         for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
-            const int sxMin = (PADDING_X == 0) ? 0
-                : max(PADDING_X - (ox * STRIDE_X), 0);
-            const int sxMax = (PADDING_X == 0
-                    && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
-                        ? KERNEL_WIDTH
-                : clamp(CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_X),
-                        0, KERNEL_WIDTH);
-            const int ix = (ox * STRIDE_X) - PADDING_X;
+            const int ix
+                = ox * STRIDE_X - PADDING_X;
 
-            const int oPos = (ox + OUTPUTS_WIDTH * oy);
-            int oOffset = OUTPUT_MEM_STRIDE * oPos;
+            /*
+             * 当前4×4 patch左上角input位置。
+             */
+            const int input_position
+                = ix + CHANNELS_WIDTH * iy;
 
-            if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
-                oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
-                            - OUTPUT_MEM_CONT_SIZE;
+            int input_offset
+                = INPUT_MEM_STRIDE * input_position;
+
+            /*
+             * 当前Conv1输入正常情况下不存在wrap。
+             * 保留这一判断，避免memory mapping以后发生改变。
+             */
+            if (INPUT_MEM_WRAP_SIZE > 0
+                && input_offset >= INPUT_MEM_CONT_SIZE)
+            {
+                input_offset +=
+                    INPUT_MEM_WRAP_OFFSET
+                    - INPUT_MEM_CONT_OFFSET
+                    - INPUT_MEM_CONT_SIZE;
             }
 
             /*
-             * 只有完整 4x4x1 patch 且地址 4-byte 对齐时，才走 input buffer。
-             * 如果遇到 padding、wrap 或 unaligned 地址，就回退到原始 scalar 逻辑。
+             * 四行input指针。
              */
-            bool patch_ok = ((ox & 1) == 0);
-            
-            const UDATA_T* row0 = 0;
-            const UDATA_T* row1 = 0;
-            const UDATA_T* row2 = 0;
-            const UDATA_T* row3 = 0;
+            const UDATA_T* row0
+                = inputs + input_offset;
 
+            const UDATA_T* row1
+                = row0 + row_stride;
 
-            const int iPos0 = ((sxMin + ix)
-                            + CHANNELS_WIDTH * (iy + syMin));
-            int iOffset0 = INPUT_MEM_STRIDE * iPos0;
+            const UDATA_T* row2
+                = row1 + row_stride;
 
-            const int row_stride = CHANNELS_WIDTH * INPUT_MEM_STRIDE;
+            const UDATA_T* row3
+                = row2 + row_stride;
 
-            row0 = inputs + iOffset0;
-            row1 = inputs + iOffset0 + row_stride;
-            row2 = inputs + iOffset0 + 2 * row_stride;
-            row3 = inputs + iOffset0 + 3 * row_stride;
-            
+            /*
+             * 当前输出位置。
+             */
+            const int output_position
+                = ox + OUTPUTS_WIDTH * oy;
 
-            if (patch_ok) {
-                // buf4 x0: active_blocks = 1。这个 patch 会被所有 filters 复用。
-                buffer4_conv1_patch(row0, row1, row2, row3);
+            int output_offset
+                = OUTPUT_MEM_STRIDE * output_position;
+
+            if (OUTPUT_MEM_WRAP_SIZE > 0
+                && output_offset >= OUTPUT_MEM_CONT_SIZE)
+            {
+                output_offset +=
+                    OUTPUT_MEM_WRAP_OFFSET
+                    - OUTPUT_MEM_CONT_OFFSET
+                    - OUTPUT_MEM_CONT_SIZE;
             }
 
-            for (int output = 0; output < NB_OUTPUTS; ++output) {
-                SUM_T weightedSum = biasses[output];
+            /*
+             * ========================================================
+             * Output filter 0
+             * ========================================================
+             *
+             * output 0负责：
+             *
+             *   1. 根据实际input地址检查alignment；
+             *   2. 执行MAC16计算；
+             *   3. 同时把4×4 input patch写进硬件buffer。
+             *
+             * 注意：
+             *
+             * alignment只在这里检查一次。
+             */
+            {
+                const int output = 0;
 
-                if (patch_ok) {
+                SUM_T weightedSum
+                    = biasses[output];
+
+                const WDATA_T* filter_weights
+                    = weights;
+
+                const uintptr_t input_alignment
+                    = ((uintptr_t)row0) & 3u;
+
+                if (input_alignment == 0u) {
                     /*
-                     * Conv1 一个 filter 的 16 个 weight 连续存放。
-                     * input 已经在 buffer 的 block0 里，所以这里只需要换 weight。
+                     * 4-byte aligned：
+                     * 每行直接使用一个lw。
                      */
-                    const int wOffset = NB_CHANNELS * (sxMin
-                        + KERNEL_WIDTH * (syMin + KERNEL_HEIGHT * output));
-
-                    mac16buf_conv1(weights + wOffset, &weightedSum);
+                    mac16buf_para_conv1_aligned(
+                        row0,
+                        row1,
+                        row2,
+                        row3,
+                        filter_weights,
+                        &weightedSum
+                    );
+                }
+                else if (input_alignment == 2u) {
+                    /*
+                     * 地址为2 mod 4：
+                     * 每行使用两个lhu拼接。
+                     */
+                    mac16buf_para_conv1_unaligned2(
+                        row0,
+                        row1,
+                        row2,
+                        row3,
+                        filter_weights,
+                        &weightedSum
+                    );
                 }
                 else {
                     /*
-                    * 安全回退路径：保持原始卷积语义。
-                    * 但这里不再一个 sx 一个 sx 地处理，而是优先一整行一整行处理。
-                    *
-                    * 对 Conv1 来说：
-                    *   KERNEL_WIDTH = 4
-                    *   NB_CHANNELS = 1
-                    *   所以一行 = 4 个 input = 4 个 MAC
-                    */
-                    for (int sy = 0; sy <= KERNEL_HEIGHT - 4; sy += 4) {
-                        if ((PADDING_Y != 0 || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
-                            && sy >= syMax - syMin)
-                        {
-                            break;
-                        }
+                     * 对当前Conv1正常布局来说，这个分支不应该出现。
+                     *
+                     * 如果input数组的初始地址不是至少2-byte aligned，
+                     * 则暂时使用scalar fallback保证结果正确。
+                     *
+                     * 由于这个fallback没有填硬件buffer，所以后面的
+                     * output 1～15也必须全部走scalar。
+                     */
+                    for (int fallback_output = 0;
+                         fallback_output < NB_OUTPUTS;
+                         ++fallback_output)
+                    {
+                        SUM_T fallback_sum
+                            = biasses[fallback_output];
 
-                        /*
-                        * 当前 kernel row 对应的 input 起始位置。
-                        * 注意这里从 sxMin 开始，所以如果有 padding，左边无效部分会被跳过。
-                        */
-                        const int iPos = ((sxMin + ix)
-                                        + CHANNELS_WIDTH * (iy + syMin + sy));
-                        int iOffset = INPUT_MEM_STRIDE * iPos;
+                        const WDATA_T* fallback_weights
+                            = weights
+                            + fallback_output * filter_size;
 
-                        /*
-                        * 当前 kernel row 对应的 weight 起始位置。
-                        * weight layout:
-                        *   [output][sy][sx][channel]
-                        */
-                        const int wOffset = NB_CHANNELS * (sxMin
-                            + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
+                        macsOnRange_no_alined(
+                            row0,
+                            fallback_weights,
+                            &fallback_sum,
+                            filter_size
+                        );
 
-                        /*
-                        * 如果 input memory 中这一行是连续的，就整行处理。
-                        * Conv1 中 NB_CHANNELS = INPUT_MEM_STRIDE = 1，
-                        * 所以正常情况下这里会成立。
-                        */
-                        if (NB_CHANNELS == INPUT_MEM_STRIDE) {
-                            macsOnRange_no_alined(
-                                inputs + iOffset,
-                                weights + wOffset,
-                                &weightedSum,
-                                KERNEL_WIDTH * NB_CHANNELS * 4
+                        outputs[output_offset + fallback_output]
+                            = sat(
+                                fallback_sum,
+                                fallback_output,
+                                ACTIVATION,
+                                rescaling
                             );
-                        }
                     }
+
+                    /*
+                     * 当前patch已经全部完成。
+                     */
+                    continue;
                 }
 
-                outputs[oOffset + output]
-                    = sat(weightedSum, output, ACTIVATION, rescaling);
+                outputs[output_offset + output]
+                    = sat(
+                        weightedSum,
+                        output,
+                        ACTIVATION,
+                        rescaling
+                    );
+            }
+
+            /*
+             * ========================================================
+             * Output filters 1～NB_OUTPUTS-1
+             * ========================================================
+             *
+             * output 0已经将当前input patch写入硬件buffer。
+             *
+             * 因此这里：
+             *
+             *   - 不再访问原始input；
+             *   - 不再检查input alignment；
+             *   - 只加载当前filter的16个weights；
+             *   - 执行一条mac16buf。
+             */
+            const WDATA_T* filter_weights
+                = weights + filter_size;
+
+            for (int output = 1;
+                 output < NB_OUTPUTS;
+                 ++output)
+            {
+                SUM_T weightedSum
+                    = biasses[output];
+
+                mac16buf_conv1(
+                    filter_weights,
+                    &weightedSum
+                );
+
+                outputs[output_offset + output]
+                    = sat(
+                        weightedSum,
+                        output,
+                        ACTIVATION,
+                        rescaling
+                    );
+
+                /*
+                 * 移动到下一个filter的weights。
+                 *
+                 * 避免每次计算：
+                 *
+                 * output * filter_size
+                 */
+                filter_weights += filter_size;
             }
         }
     }
