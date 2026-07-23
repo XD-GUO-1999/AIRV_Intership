@@ -28,41 +28,6 @@ static int clamp(int v, int lo, int hi) {
     }
 }
 
-static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
-                        const WDATA_T* __restrict weights,
-                        SUM_T* __restrict weightedSum,
-                        int nb_iterations)
-{
-    int32_t sum = *weightedSum;
-    int iter = 0;
-
-    for (; iter <= nb_iterations - 16; iter += 16) {
-        
-        sum += inputs[iter + 0] * weights[iter + 0];
-        sum += inputs[iter + 1] * weights[iter + 1];
-        sum += inputs[iter + 2] * weights[iter + 2];
-        sum += inputs[iter + 3] * weights[iter + 3];
-        sum += inputs[iter + 24] * weights[iter + 4];
-        sum += inputs[iter + 25] * weights[iter + 5];
-        sum += inputs[iter + 26] * weights[iter + 6];
-        sum += inputs[iter + 27] * weights[iter + 7];
-        sum += inputs[iter + 48] * weights[iter + 8];
-        sum += inputs[iter + 49] * weights[iter + 9];
-        sum += inputs[iter + 50] * weights[iter + 10];
-        sum += inputs[iter + 51] * weights[iter + 11];
-        sum += inputs[iter + 72] * weights[iter + 12];
-        sum += inputs[iter + 73] * weights[iter + 13];
-        sum += inputs[iter + 74] * weights[iter + 14];
-        sum += inputs[iter + 75] * weights[iter + 15];
-    }
-
-    for (; iter < nb_iterations; ++iter)
-        {
-            sum += inputs[iter] * weights[iter];
-        }
-
-     *weightedSum = sum;
-}
 static void macsOnRange_no_alined_for_fc2(const UDATA_T* __restrict inputs,
                         const WDATA_T* __restrict weights,
                         SUM_T* __restrict weightedSum,
@@ -447,6 +412,165 @@ static inline void mac16buf_final(const WDATA_T* __restrict weights,
     *weightedSum = sum;
 }
 
+static inline __attribute__((always_inline))
+void mac16buf_first_offset2(
+    const WDATA_T* __restrict weights,
+    SUM_T* __restrict weightedSum)
+{
+    int32_t sum = *weightedSum;
+    const WDATA_T* p_wt = weights;
+
+    uint32_t w0, w1, w2, w3;
+    uint32_t tmp;
+
+    asm volatile(
+        /* w0 = weights[0..3] */
+        "lhu %[w0], 0(%[p_wt]) \n\t"
+        "lhu %[tmp], 2(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w0], %[w0], %[tmp] \n\t"
+
+        /* w1 = weights[4..7] */
+        "lhu %[w1], 4(%[p_wt]) \n\t"
+        "lhu %[tmp], 6(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w1], %[w1], %[tmp] \n\t"
+
+        /* w2 = weights[8..11] */
+        "lhu %[w2], 8(%[p_wt]) \n\t"
+        "lhu %[tmp], 10(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w2], %[w2], %[tmp] \n\t"
+
+        /* w3 = weights[12..15] */
+        "lhu %[w3], 12(%[p_wt]) \n\t"
+        "lhu %[tmp], 14(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w3], %[w3], %[tmp] \n\t"
+
+        /*
+         * first:
+         * CPU rd中的bias进入local accumulator。
+         */
+        "mac16buf %[sum], %[w0], %[w1], %[w2], %[w3] \n\t"
+
+        : [w0] "=&r"(w0),
+          [w1] "=&r"(w1),
+          [w2] "=&r"(w2),
+          [w3] "=&r"(w3),
+          [tmp] "=&r"(tmp)
+
+        : [sum] "r"(sum),
+          [p_wt] "r"(p_wt)
+
+        : "cc", "memory"
+    );
+}
+
+
+static inline __attribute__((always_inline))
+void mac16buf_middle_offset2(
+    const WDATA_T* __restrict weights)
+{
+    const WDATA_T* p_wt = weights;
+
+    uint32_t w0, w1, w2, w3;
+    uint32_t tmp;
+
+    asm volatile(
+        "lhu %[w0], 0(%[p_wt]) \n\t"
+        "lhu %[tmp], 2(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w0], %[w0], %[tmp] \n\t"
+
+        "lhu %[w1], 4(%[p_wt]) \n\t"
+        "lhu %[tmp], 6(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w1], %[w1], %[tmp] \n\t"
+
+        "lhu %[w2], 8(%[p_wt]) \n\t"
+        "lhu %[tmp], 10(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w2], %[w2], %[tmp] \n\t"
+
+        "lhu %[w3], 12(%[p_wt]) \n\t"
+        "lhu %[tmp], 14(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w3], %[w3], %[tmp] \n\t"
+
+        /*
+         * middle:
+         * 不读CPU rd，不写CPU rd。
+         */
+        "mac16buf x0, %[w0], %[w1], %[w2], %[w3] \n\t"
+
+        : [w0] "=&r"(w0),
+          [w1] "=&r"(w1),
+          [w2] "=&r"(w2),
+          [w3] "=&r"(w3),
+          [tmp] "=&r"(tmp)
+
+        : [p_wt] "r"(p_wt)
+
+        : "cc", "memory"
+    );
+}
+
+
+static inline __attribute__((always_inline))
+void mac16buf_final_offset2(
+    const WDATA_T* __restrict weights,
+    SUM_T* __restrict weightedSum)
+{
+    int32_t sum;
+    const WDATA_T* p_wt = weights;
+
+    uint32_t w0, w1, w2, w3;
+    uint32_t tmp;
+
+    asm volatile(
+        "lhu %[w0], 0(%[p_wt]) \n\t"
+        "lhu %[tmp], 2(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w0], %[w0], %[tmp] \n\t"
+
+        "lhu %[w1], 4(%[p_wt]) \n\t"
+        "lhu %[tmp], 6(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w1], %[w1], %[tmp] \n\t"
+
+        "lhu %[w2], 8(%[p_wt]) \n\t"
+        "lhu %[tmp], 10(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w2], %[w2], %[tmp] \n\t"
+
+        "lhu %[w3], 12(%[p_wt]) \n\t"
+        "lhu %[tmp], 14(%[p_wt]) \n\t"
+        "slli %[tmp], %[tmp], 16 \n\t"
+        "or %[w3], %[w3], %[tmp] \n\t"
+
+        /*
+         * final:
+         * local accumulator写回CPU rd。
+         */
+        "mac16buf %[sum], %[w0], %[w1], %[w2], %[w3] \n\t"
+
+        : [sum] "=r"(sum),
+          [w0] "=&r"(w0),
+          [w1] "=&r"(w1),
+          [w2] "=&r"(w2),
+          [w3] "=&r"(w3),
+          [tmp] "=&r"(tmp)
+
+        : [p_wt] "r"(p_wt)
+
+        : "cc", "memory"
+    );
+
+    *weightedSum = sum;
+}
+
+
 static inline void mac16buf_para_first(const UDATA_T* __restrict inputs,
                                       const WDATA_T* __restrict weights,
                                       SUM_T* __restrict weightedSum)
@@ -790,49 +914,7 @@ static void convcellPropagate1(
                         &weightedSum
                     );
                 }
-                else {
-                    /*
-                     * 对当前Conv1正常布局来说，这个分支不应该出现。
-                     *
-                     * 如果input数组的初始地址不是至少2-byte aligned，
-                     * 则暂时使用scalar fallback保证结果正确。
-                     *
-                     * 由于这个fallback没有填硬件buffer，所以后面的
-                     * output 1～15也必须全部走scalar。
-                     */
-                    for (int fallback_output = 0;
-                         fallback_output < NB_OUTPUTS;
-                         ++fallback_output)
-                    {
-                        SUM_T fallback_sum
-                            = biasses[fallback_output];
-
-                        const WDATA_T* fallback_weights
-                            = weights
-                            + fallback_output * filter_size;
-
-                        macsOnRange_no_alined(
-                            row0,
-                            fallback_weights,
-                            &fallback_sum,
-                            filter_size
-                        );
-
-                        outputs[output_offset + fallback_output]
-                            = sat(
-                                fallback_sum,
-                                fallback_output,
-                                ACTIVATION,
-                                rescaling
-                            );
-                    }
-
-                    /*
-                     * 当前patch已经全部完成。
-                     */
-                    continue;
-                }
-
+                
                 outputs[output_offset + output]
                     = sat(
                         weightedSum,
@@ -1191,135 +1273,296 @@ static void fccellPropagateDATA_T(
     int OUTPUT_MEM_WRAP_OFFSET,
     int OUTPUT_MEM_WRAP_SIZE,
     int OUTPUT_MEM_STRIDE)
-// {
-//     /*
-//      * FC2 的 buffer 策略：
-//      *   - FC2 input = 150 byte。
-//      *   - 前 144 byte = 9 个 16-byte block，用 buf4 x8 + mac16buf。
-//      *   - 最后 6 byte 不是完整 16-byte block，先保留 scalar 处理。
-//      *   - 每个 output class 执行 9 次 mac16buf 后，硬件 read counter 自动回到 0。
-//      */
-//    const int total_inputs = NB_CHANNELS * CHANNELS_WIDTH * CHANNELS_HEIGHT;
-
-//     buffer4_setmode_fc2();
-
-//     for (int och = 0; och < NB_OUTPUTS; och++) {
-//         SUM_T weightedSum = biasses[och];
-
-//         const int wBase = och * total_inputs;
-//         const WDATA_T* weight_ptr = weights + wBase;
-//         const bool weight_aligned = (((uintptr_t)weight_ptr & 0x3) == 0);
-
-//         if (och == 0) {
-//             if (weight_aligned) {
-//                 mac16buf_para_first(
-//                     inputs + 0 * 16,
-//                     weights + wBase + 0 * 16,
-//                     &weightedSum
-//                 );
-
-//                 for (int block = 1; block < 8; ++block) {
-//                     mac16buf_para_middle(
-//                         inputs + block * 16,
-//                         weights + wBase + block * 16
-//                     );
-//                 }
-
-//                 mac16buf_para_final(
-//                     inputs + 8 * 16,
-//                     weights + wBase + 8 * 16,
-//                     &weightedSum
-//                 );
-
-//                 for (int index = 144; index < total_inputs; ++index) {
-//                     weightedSum += inputs[index] * weights[wBase + index];
-//                 }
-//             }
-//             else {
-//                 macsOnRange_no_alined_for_fc2(
-//                     inputs,
-//                     weights + wBase,
-//                     &weightedSum,
-//                     total_inputs
-//                 );
-//             }
-//         }
-//         else if (weight_aligned) {
-//             mac16buf_first(weights + wBase + 0 * 16, &weightedSum);
-
-//             for (int block = 1; block < 8; ++block) {
-//                 mac16buf_middle(weights + wBase + block * 16);
-//             }
-
-//             mac16buf_final(
-//                 weights + wBase + 8 * 16,
-//                 &weightedSum
-//             );
-
-//             for (int index = 144; index < total_inputs; ++index) {
-//                 weightedSum += inputs[index] * weights[wBase + index];
-//             }
-//         }
-//         else {
-//             macsOnRange_no_alined_for_fc2(
-//                 inputs,
-//                 weights + wBase,
-//                 &weightedSum,
-//                 total_inputs
-//             );
-//         }
-
-//         outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
-//     }
-
-//     return;
-// }
 {
     /*
-     * FC2 的 buffer 策略：
-     *   - FC2 input = 150 byte。
-     *   - 前 144 byte = 9 个 16-byte block，用 buf4 x8 + mac16buf。
-     *   - 最后 6 byte 不是完整 16-byte block，先保留 scalar 处理。
-     *   - 每个 output class 执行 9 次 mac16buf 后，硬件 read counter 自动回到 0。
+     * FC2:
+     *
+     * input = 150 bytes
+     *
+     * 前144 bytes:
+     *     9 × MAC16BUF
+     *
+     * 最后6 bytes:
+     *     scalar
+     *
+     * 优化：
+     *
+     * output 0:
+     *     使用MAC16BUF_PARA，
+     *     一边计算，一边填充9个input buffer blocks。
+     *
+     * output 1..9:
+     *     直接复用input buffer。
+     *
+     * 对weight:
+     *     addr % 4 == 0 -> 普通lw版本
+     *     addr % 4 == 2 -> offset2 halfword版本
      */
-    const int total_inputs = NB_CHANNELS * CHANNELS_WIDTH * CHANNELS_HEIGHT;
+    const int total_inputs
+        = NB_CHANNELS * CHANNELS_WIDTH * CHANNELS_HEIGHT;
+
+    /*
+     * 非常重要：
+     *
+     * 设置active_blocks = 9。
+     *
+     * 之前你是通过连续9条buf4 x8来完成mode设置+
+     * buffer填充。
+     *
+     * 现在buffer填充交给output0的MAC16BUF_PARA，
+     * 所以这里只需要设置一次mode。
+     */
+    buffer4_setmode_fc2();
 
 
-    // 只 buffer 前 144 个 input，剩下 6 个 input 在每个 output 中 scalar 累加。
-    for (int block = 0; block < 9; ++block) {
-        buffer4_contiguous16_fc2(inputs + block * 16);
-    }
+    /*
+     * ============================================================
+     * OUTPUT 0
+     * ============================================================
+     *
+     * output0的weights从整个fc2_weights起始地址开始，
+     * 正常情况下这里4-byte aligned。
+     *
+     * 使用PARA：
+     *   calculation + input buffer filling
+     */
+    {
+        const int och = 0;
+        const int wBase = 0;
 
-    for (int och = 0; och < NB_OUTPUTS; och++) {
         SUM_T weightedSum = biasses[och];
 
-        const int wBase = och * total_inputs;
-        const WDATA_T* weight_ptr = weights + wBase;
-        const bool weight_aligned = (((uintptr_t)weight_ptr & 0x3) == 0);
+        /*
+         * block 0: first
+         */
+        mac16buf_para_first(
+            inputs + 0,
+            weights + wBase + 0,
+            &weightedSum
+        );
 
-        if (weight_aligned) {
+        /*
+         * blocks 1..7: middle
+         *
+         * 这里直接展开，不再写block循环。
+         */
+        mac16buf_para_middle(
+            inputs + 16,
+            weights + wBase + 16
+        );
 
-            mac16buf_first(weights + wBase + 0 * 16, &weightedSum);
+        mac16buf_para_middle(
+            inputs + 32,
+            weights + wBase + 32
+        );
 
-            for (int block = 1; block < 8; ++block) {
-                const int wOffset = wBase + block * 16;
-                    mac16buf_middle(weights + wOffset);
+        mac16buf_para_middle(
+            inputs + 48,
+            weights + wBase + 48
+        );
 
-            }
-            mac16buf_final(weights + wBase + 8 * 16, &weightedSum);
+        mac16buf_para_middle(
+            inputs + 64,
+            weights + wBase + 64
+        );
+
+        mac16buf_para_middle(
+            inputs + 80,
+            weights + wBase + 80
+        );
+
+        mac16buf_para_middle(
+            inputs + 96,
+            weights + wBase + 96
+        );
+
+        mac16buf_para_middle(
+            inputs + 112,
+            weights + wBase + 112
+        );
+
+        /*
+         * block 8: final
+         *
+         * 结束时：
+         *   - local accumulator写回weightedSum；
+         *   - input buffer已经完整保存144 bytes。
+         */
+        mac16buf_para_final(
+            inputs + 128,
+            weights + wBase + 128,
+            &weightedSum
+        );
+
+        /*
+         * 剩余6个inputs：144..149。
+         *
+         * 直接展开，避免一个只有6次的循环。
+         */
+        weightedSum += inputs[144] * weights[wBase + 144];
+        weightedSum += inputs[145] * weights[wBase + 145];
+        weightedSum += inputs[146] * weights[wBase + 146];
+        weightedSum += inputs[147] * weights[wBase + 147];
+        weightedSum += inputs[148] * weights[wBase + 148];
+        weightedSum += inputs[149] * weights[wBase + 149];
+
+        outputs[och]
+            = sat(weightedSum, och, ACTIVATION, rescaling);
+    }
 
 
-            // FC2 剩余 6 个 input：index 144..149。
-            for (int i = 144; i < total_inputs; ++i) {
-                weightedSum += inputs[i] * weights[wBase + i];
-            }
-        }else{
-            macsOnRange_no_alined_for_fc2(
-                inputs, 
-                weights + wBase, 
-                &weightedSum, total_inputs);
+    /*
+     * ============================================================
+     * OUTPUT 1 .. NB_OUTPUTS-1
+     * ============================================================
+     *
+     * input_buffer已经由output0填好。
+     *
+     * 后续outputs只需要读取weights。
+     */
+    for (int och = 1; och < NB_OUTPUTS; ++och) {
+
+        SUM_T weightedSum = biasses[och];
+
+        const int wBase
+            = och * total_inputs;
+
+        const WDATA_T* weight_ptr
+            = weights + wBase;
+
+        const uintptr_t weight_alignment
+            = ((uintptr_t)weight_ptr) & 3u;
+
+
+        /*
+         * ========================================================
+         * CASE 1:
+         * Weight address 4-byte aligned
+         * ========================================================
+         */
+        if (weight_alignment == 0u) {
+
+            /*
+             * block 0: first
+             */
+            mac16buf_first(
+                weight_ptr + 0,
+                &weightedSum
+            );
+
+            /*
+             * blocks 1..4
+             */
+            mac16buf_middle4(
+                weight_ptr + 16
+            );
+
+            /*
+             * blocks 5、6、7
+             */
+            mac16buf_middle(
+                weight_ptr + 80
+            );
+
+            mac16buf_middle(
+                weight_ptr + 96
+            );
+
+            mac16buf_middle(
+                weight_ptr + 112
+            );
+
+            /*
+             * block 8: final
+             */
+            mac16buf_final(
+                weight_ptr + 128,
+                &weightedSum
+            );
         }
-        outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
+
+
+        /*
+         * ========================================================
+         * CASE 2:
+         * Weight address = 2 mod 4
+         * ========================================================
+         *
+         * 这是FC2中output 1、3、5、7、9正常会出现的情况。
+         *
+         * 不再整层scalar fallback。
+         */
+        else if (weight_alignment == 2u) {
+
+            /*
+             * block 0
+             */
+            mac16buf_first_offset2(
+                weight_ptr + 0,
+                &weightedSum
+            );
+
+            /*
+             * blocks 1..7
+             */
+            mac16buf_middle_offset2(
+                weight_ptr + 16
+            );
+
+            mac16buf_middle_offset2(
+                weight_ptr + 32
+            );
+
+            mac16buf_middle_offset2(
+                weight_ptr + 48
+            );
+
+            mac16buf_middle_offset2(
+                weight_ptr + 64
+            );
+
+            mac16buf_middle_offset2(
+                weight_ptr + 80
+            );
+
+            mac16buf_middle_offset2(
+                weight_ptr + 96
+            );
+
+            mac16buf_middle_offset2(
+                weight_ptr + 112
+            );
+
+            /*
+             * block 8
+             */
+            mac16buf_final_offset2(
+                weight_ptr + 128,
+                &weightedSum
+            );
+        }
+        /*
+         * ========================================================
+         * 剩余6项
+         * ========================================================
+         *
+         * 对齐与offset2两种MAC16路径都在这里统一处理。
+         */
+        weightedSum += inputs[144] * weight_ptr[144];
+        weightedSum += inputs[145] * weight_ptr[145];
+        weightedSum += inputs[146] * weight_ptr[146];
+        weightedSum += inputs[147] * weight_ptr[147];
+        weightedSum += inputs[148] * weight_ptr[148];
+        weightedSum += inputs[149] * weight_ptr[149];
+
+
+        outputs[och]
+            = sat(
+                weightedSum,
+                och,
+                ACTIVATION,
+                rescaling
+            );
     }
 
     return;
