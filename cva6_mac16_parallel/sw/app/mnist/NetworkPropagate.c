@@ -384,6 +384,113 @@ static inline void mac16buf_middle4(const WDATA_T* __restrict weights)
         : "cc", "memory"
     );
 }
+static inline __attribute__((always_inline))
+void mac16buf_para_middle4(
+    const UDATA_T* __restrict inputs,
+    const WDATA_T* __restrict weights)
+{
+    const UDATA_T* p_in = inputs;
+    const WDATA_T* p_wt = weights;
+
+    uint32_t w0, w1, w2, w3;
+
+    asm volatile(
+
+        /*
+         * ============================================================
+         * block 0
+         * input  [0..15]
+         * weight [0..15]
+         * ============================================================
+         */
+
+        "lw %[w0],  0(%[p_wt]) \n\t"
+        "lw %[w1],  4(%[p_wt]) \n\t"
+        "lw %[w2],  8(%[p_wt]) \n\t"
+        "lw %[w3], 12(%[p_wt]) \n\t"
+
+        "lw t3,  0(%[p_in]) \n\t"
+        "lw t4,  4(%[p_in]) \n\t"
+        "lw t5,  8(%[p_in]) \n\t"
+        "lw t6, 12(%[p_in]) \n\t"
+
+        "mac16buf_para x0, %[w0], %[w1], %[w2], %[w3] \n\t"
+
+
+        /*
+         * ============================================================
+         * block 1
+         * input  [16..31]
+         * weight [16..31]
+         * ============================================================
+         */
+
+        "lw %[w0], 16(%[p_wt]) \n\t"
+        "lw %[w1], 20(%[p_wt]) \n\t"
+        "lw %[w2], 24(%[p_wt]) \n\t"
+        "lw %[w3], 28(%[p_wt]) \n\t"
+
+        "lw t3, 16(%[p_in]) \n\t"
+        "lw t4, 20(%[p_in]) \n\t"
+        "lw t5, 24(%[p_in]) \n\t"
+        "lw t6, 28(%[p_in]) \n\t"
+
+        "mac16buf_para x0, %[w0], %[w1], %[w2], %[w3] \n\t"
+
+
+        /*
+         * ============================================================
+         * block 2
+         * input  [32..47]
+         * weight [32..47]
+         * ============================================================
+         */
+
+        "lw %[w0], 32(%[p_wt]) \n\t"
+        "lw %[w1], 36(%[p_wt]) \n\t"
+        "lw %[w2], 40(%[p_wt]) \n\t"
+        "lw %[w3], 44(%[p_wt]) \n\t"
+
+        "lw t3, 32(%[p_in]) \n\t"
+        "lw t4, 36(%[p_in]) \n\t"
+        "lw t5, 40(%[p_in]) \n\t"
+        "lw t6, 44(%[p_in]) \n\t"
+
+        "mac16buf_para x0, %[w0], %[w1], %[w2], %[w3] \n\t"
+
+
+        /*
+         * ============================================================
+         * block 3
+         * input  [48..63]
+         * weight [48..63]
+         * ============================================================
+         */
+
+        "lw %[w0], 48(%[p_wt]) \n\t"
+        "lw %[w1], 52(%[p_wt]) \n\t"
+        "lw %[w2], 56(%[p_wt]) \n\t"
+        "lw %[w3], 60(%[p_wt]) \n\t"
+
+        "lw t3, 48(%[p_in]) \n\t"
+        "lw t4, 52(%[p_in]) \n\t"
+        "lw t5, 56(%[p_in]) \n\t"
+        "lw t6, 60(%[p_in]) \n\t"
+
+        "mac16buf_para x0, %[w0], %[w1], %[w2], %[w3] \n\t"
+
+        : [w0] "=&r" (w0),
+          [w1] "=&r" (w1),
+          [w2] "=&r" (w2),
+          [w3] "=&r" (w3)
+
+        : [p_in] "r" (p_in),
+          [p_wt] "r" (p_wt)
+
+        : "t3", "t4", "t5", "t6",
+          "cc", "memory"
+    );
+}
 
 
 
@@ -671,6 +778,87 @@ static inline void mac16buf_para_final(const UDATA_T* __restrict inputs,
 
     *weightedSum = sum;
 }
+
+static inline __attribute__((always_inline))
+void mac16buf_conv2_25blocks(
+    const WDATA_T* __restrict weights,
+    SUM_T* __restrict weightedSum)
+{
+    /*
+     * Conv2:
+     *
+     * 5 × 5 × 16 = 400 weights
+     * 400 / 16 = 25 MAC16 blocks
+     *
+     * block 0      : first
+     * block 1..23  : middle
+     * block 24     : final
+     */
+
+    /* block 0 */
+    mac16buf_first(
+        weights + 0,
+        weightedSum
+    );
+
+    /*
+     * blocks 1..20
+     *
+     * 每个middle4处理4个连续block = 64 weights。
+     */
+    mac16buf_middle4(weights + 16);   // blocks 1..4
+    mac16buf_middle4(weights + 80);   // blocks 5..8
+    mac16buf_middle4(weights + 144);  // blocks 9..12
+    mac16buf_middle4(weights + 208);  // blocks 13..16
+    mac16buf_middle4(weights + 272);  // blocks 17..20
+
+    /* blocks 21..23 */
+    mac16buf_middle(weights + 336);   // block 21
+    mac16buf_middle(weights + 352);   // block 22
+    mac16buf_middle(weights + 368);   // block 23
+
+    /* block 24 */
+    mac16buf_final(
+        weights + 384,
+        weightedSum
+    );
+}
+
+static inline __attribute__((always_inline))
+void mac16buf_fc1_24blocks(
+    const WDATA_T* __restrict weights,
+    SUM_T* __restrict weightedSum)
+{
+    /* block 0 */
+    mac16buf_first(
+        weights + 0,
+        weightedSum
+    );
+
+    /*
+     * blocks 1..20
+     */
+    mac16buf_middle4(weights + 16);   // 1..4
+    mac16buf_middle4(weights + 80);   // 5..8
+    mac16buf_middle4(weights + 144);  // 9..12
+    mac16buf_middle4(weights + 208);  // 13..16
+    mac16buf_middle4(weights + 272);  // 17..20
+
+    /*
+     * blocks 21..22
+     */
+    mac16buf_middle(weights + 336);   // 21
+    mac16buf_middle(weights + 352);   // 22
+
+    /*
+     * block 23
+     */
+    mac16buf_final(
+        weights + 368,
+        weightedSum
+    );
+}
+
 
 static void macsOnRange(const UDATA_T* __restrict inputs,
                         const WDATA_T* __restrict weights,
@@ -1115,36 +1303,27 @@ static void convcellPropagate2(
             * 所以后面的 filters 继续用原来的 MAC16BUF 逻辑。
             * ============================================================
             */
+            const WDATA_T* filter_weights
+                = weights + 400;
+
             for (int output = 1; output < NB_OUTPUTS; ++output) {
+
                 SUM_T weightedSum = biasses[output];
 
-                const int wBase = NB_CHANNELS * (
-                    sxMin + KERNEL_WIDTH * (syMin + KERNEL_HEIGHT * output)
-                );
-
-                // block 0: first
-                mac16buf_first(weights + wBase + 0 * NB_CHANNELS, &weightedSum);
-
-                int block = 1;
-
-                // middle blocks: block 1..20, 每次展开 4 个 mac16buf
-                for (; block <= 20; block += 4) {
-                    mac16buf_middle4(weights + wBase + block * NB_CHANNELS);
-                }
-
-                // 剩余 middle blocks: block 21, 22, 23
-                for (; block < kernel_blocks - 1; ++block) {
-                    mac16buf_middle(weights + wBase + block * NB_CHANNELS);
-                }
-
-                // block 24: final
-                mac16buf_final(
-                    weights + wBase + (kernel_blocks - 1) * NB_CHANNELS,
+                mac16buf_conv2_25blocks(
+                    filter_weights,
                     &weightedSum
                 );
 
                 outputs[oOffset + output]
-                    = sat(weightedSum, output, ACTIVATION, rescaling);
+                    = sat(
+                        weightedSum,
+                        output,
+                        ACTIVATION,
+                        rescaling
+                    );
+
+                filter_weights += 400;
             }
         }
     }
@@ -1193,58 +1372,86 @@ static void fccellPropagateUDATA_T(
     * output0 用 PARA 填 buffer。
     * output1..NB_OUTPUTS-1 复用 buffer。
     */
+    const WDATA_T* neuron_weights = weights;
     for (int och = 0; och < NB_OUTPUTS; och++) {
         SUM_T weightedSum = biasses[och];
 
         const int wBase = och * total_inputs;
 
         if (och == 0) {
+
             /*
-            * output0:
-            * 一边计算 neuron0，一边把 24 个 input blocks 写进 input_buffer。
+            * block 0
             */
             mac16buf_para_first(
-                inputs + 0 * 16,
-                weights + wBase + 0 * 16,
+                inputs,
+                weights + wBase,
                 &weightedSum
             );
 
-            int block = 1;
-
-            for (; block < 23; ++block) {
-                mac16buf_para_middle(
-                    inputs + block * 16,
-                    weights + wBase + block * 16
-                );
-            }
-
-            mac16buf_para_final(
-                inputs + 23 * 16,
-                weights + wBase + 23 * 16,
-                &weightedSum
-            );
-        }
-        else {
             /*
-            * output1..:
-            * input_buffer 已经由 output0 填好了，只换 weight。
+            * blocks 1..20
             */
-            mac16buf_first(weights + wBase + 0 * 16, &weightedSum);
+            mac16buf_para_middle4(
+                inputs + 16,
+                weights + wBase + 16
+            );                                  // blocks 1..4
 
-            int block = 1;
+            mac16buf_para_middle4(
+                inputs + 80,
+                weights + wBase + 80
+            );                                  // blocks 5..8
 
-            for (; block <= 18; block += 4) {
-                mac16buf_middle4(weights + wBase + block * 16);
-            }
+            mac16buf_para_middle4(
+                inputs + 144,
+                weights + wBase + 144
+            );                                  // blocks 9..12
 
-            for (; block < 23; ++block) {
-                mac16buf_middle(weights + wBase + block * 16);
-            }
+            mac16buf_para_middle4(
+                inputs + 208,
+                weights + wBase + 208
+            );                                  // blocks 13..16
 
-            mac16buf_final(weights + wBase + 23 * 16, &weightedSum);
+            mac16buf_para_middle4(
+                inputs + 272,
+                weights + wBase + 272
+            );                                  // blocks 17..20
+
+            /*
+            * blocks 21、22
+            */
+            mac16buf_para_middle(
+                inputs + 336,
+                weights + wBase + 336
+            );
+
+            mac16buf_para_middle(
+                inputs + 352,
+                weights + wBase + 352
+            );
+
+            /*
+            * block 23
+            */
+            mac16buf_para_final(
+                inputs + 368,
+                weights + wBase + 368,
+                &weightedSum
+            );
+        } else {
+            /*
+            * output1..NB_OUTPUTS-1:
+            * input_buffer 已经由 output0 填满。
+            * 直接用 mac16buf 计算。
+            */
+            mac16buf_fc1_24blocks(
+                neuron_weights,
+                &weightedSum
+            );
         }
 
         outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
+        neuron_weights += 384;
     }
 
     return;
