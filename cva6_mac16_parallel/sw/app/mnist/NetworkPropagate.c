@@ -28,39 +28,6 @@ static int clamp(int v, int lo, int hi) {
     }
 }
 
-static void macsOnRange_no_alined_for_fc2(const UDATA_T* __restrict inputs,
-                        const WDATA_T* __restrict weights,
-                        SUM_T* __restrict weightedSum,
-                        int nb_iterations)
-{
-    int32_t sum = *weightedSum;
-    int iter = 0;
-
-        for (; iter <= nb_iterations - 16; iter += 16) {
-            sum += inputs[iter + 0] * weights[iter + 0];
-            sum += inputs[iter + 1] * weights[iter + 1];
-            sum += inputs[iter + 2] * weights[iter + 2];
-            sum += inputs[iter + 3] * weights[iter + 3];
-            sum += inputs[iter + 4] * weights[iter + 4];
-            sum += inputs[iter + 5] * weights[iter + 5];
-            sum += inputs[iter + 6] * weights[iter + 6];
-            sum += inputs[iter + 7] * weights[iter + 7];
-            sum += inputs[iter + 8] * weights[iter + 8];
-            sum += inputs[iter + 9] * weights[iter + 9];
-            sum += inputs[iter + 10] * weights[iter + 10];
-            sum += inputs[iter + 11] * weights[iter + 11];
-            sum += inputs[iter + 12] * weights[iter + 12];
-            sum += inputs[iter + 13] * weights[iter + 13];
-            sum += inputs[iter + 14] * weights[iter + 14];
-            sum += inputs[iter + 15] * weights[iter + 15];
-            }
-            for (; iter < nb_iterations; ++iter)
-            {
-                sum += inputs[iter] * weights[iter];
-            }     
-     *weightedSum = sum;
-}
-
 /*
  * ============================================================
  * 统一 input buffer 辅助函数
@@ -142,25 +109,6 @@ static inline void buffer4_setmode_fc2(void)
     );
 }
 
-
-static inline void buffer4_contiguous16_fc2(const UDATA_T* __restrict inputs)
-{
-    const UDATA_T *p_in = inputs;
-    uint32_t buf0, buf1, buf2, buf3;
-    asm volatile(
-        "lw %[buf0], 0(%[p_in]) \n\t"
-        "lw %[buf1], 4(%[p_in]) \n\t"
-        "lw %[buf2], 8(%[p_in]) \n\t"
-        "lw %[buf3], 12(%[p_in]) \n\t"
-        "buf4 x8, %[buf0], %[buf1], %[buf2], %[buf3] \n\t"
-        : [buf0] "=&r" (buf0),
-          [buf1] "=&r" (buf1),
-          [buf2] "=&r" (buf2),
-          [buf3] "=&r" (buf3)
-        : [p_in] "r" (p_in)
-        : "cc", "memory"
-    );
-}
 /* 只执行 MAC，不更新 input buffer。
  * 这个函数假设：对应的 input block 已经在硬件 input buffer 中。
  * 硬件每执行一次 mac16buf，会根据 active_blocks 自动移动 read counter。
@@ -1085,7 +1033,7 @@ static void convcellPropagate1(
                         row2,
                         row3,
                         filter_weights,
-                        &weightedSum
+                        weightedSum
                     );
                 }
                 else if (input_alignment == 2u) {
@@ -1099,7 +1047,7 @@ static void convcellPropagate1(
                         row2,
                         row3,
                         filter_weights,
-                        &weightedSum
+                        weightedSum
                     );
                 }
                 
