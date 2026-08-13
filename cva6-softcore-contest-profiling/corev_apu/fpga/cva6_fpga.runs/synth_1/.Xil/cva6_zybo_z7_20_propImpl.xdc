@@ -1,5 +1,5 @@
-set_property SRC_FILE_INFO {cfile:/home/imtuser/AIRV/cva6-softcore-contest/corev_apu/fpga/constraints/zybo_z7_20.xdc rfile:../../../constraints/zybo_z7_20.xdc id:1} [current_design]
-set_property SRC_FILE_INFO {cfile:/home/imtuser/AIRV/cva6-softcore-contest/corev_apu/fpga/constraints/cva6_fpga.xdc rfile:../../../constraints/cva6_fpga.xdc id:2} [current_design]
+set_property SRC_FILE_INFO {cfile:/home/imtuser/AIRV/cva6-softcore-contest-profiling/corev_apu/fpga/constraints/zybo_z7_20.xdc rfile:../../../constraints/zybo_z7_20.xdc id:1} [current_design]
+set_property SRC_FILE_INFO {cfile:/home/imtuser/AIRV/cva6-softcore-contest-profiling/corev_apu/fpga/constraints/cva6_fpga.xdc rfile:../../../constraints/cva6_fpga.xdc id:2} [current_design]
 set_property src_info {type:XDC file:1 line:1 export:INPUT save:INPUT read:READ} [current_design]
 set_property PACKAGE_PIN K17 [get_ports clk_sys]
 set_property src_info {type:XDC file:1 line:5 export:INPUT save:INPUT read:READ} [current_design]

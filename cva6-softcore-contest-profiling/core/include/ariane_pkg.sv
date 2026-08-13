@@ -443,10 +443,6 @@ package ariane_pkg;
     MULHU,
     MULHSU,
     MULW,
-    //modification
-    MAC4,
-    //modification
-  
     // Divisions
     DIV,
     DIVU,

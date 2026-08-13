@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2024 Advanced Micro Devices, Inc. All Rights Reserved.
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2024.1 (lin64) Build 5076996 Wed May 22 18:36:09 MDT 2024
-| Date         : Thu May 21 15:09:52 2026
+| Date         : Thu Aug 13 14:40:15 2026
 | Host         : EQI07362 running 64-bit Ubuntu 22.04.5 LTS
 | Command      : report_methodology -file cva6_zybo_z7_20_methodology_drc_routed.rpt -pb cva6_zybo_z7_20_methodology_drc_routed.pb -rpx cva6_zybo_z7_20_methodology_drc_routed.rpx
 | Design       : cva6_zybo_z7_20
@@ -322,21 +322,21 @@ XDCH-2#1 Warning
 Same min and max delay values on IO port  
 The same input delay of 5.000 ns has been defined on port 'tdi' relative to clock tck for both max and min. Make sure this reflects the design intent.
 set_input_delay -clock tck -clock_fall 5.000 [get_ports tdi]
-/home/imtuser/AIRV/cva6-softcore-contest/corev_apu/fpga/constraints/cva6_fpga.xdc (Line: 8)
+/home/imtuser/AIRV/cva6-softcore-contest-profiling/corev_apu/fpga/constraints/cva6_fpga.xdc (Line: 8)
 Related violations: <none>
 
 XDCH-2#2 Warning
 Same min and max delay values on IO port  
 The same input delay of 5.000 ns has been defined on port 'tms' relative to clock tck for both max and min. Make sure this reflects the design intent.
 set_input_delay -clock tck -clock_fall 5.000 [get_ports tms]
-/home/imtuser/AIRV/cva6-softcore-contest/corev_apu/fpga/constraints/cva6_fpga.xdc (Line: 9)
+/home/imtuser/AIRV/cva6-softcore-contest-profiling/corev_apu/fpga/constraints/cva6_fpga.xdc (Line: 9)
 Related violations: <none>
 
 XDCH-2#3 Warning
 Same min and max delay values on IO port  
 The same output delay of 5.000 ns has been defined on port 'tdo' relative to clock tck for both max and min. Make sure this reflects the design intent.
 set_output_delay -clock tck 5.000 [get_ports tdo]
-/home/imtuser/AIRV/cva6-softcore-contest/corev_apu/fpga/constraints/cva6_fpga.xdc (Line: 10)
+/home/imtuser/AIRV/cva6-softcore-contest-profiling/corev_apu/fpga/constraints/cva6_fpga.xdc (Line: 10)
 Related violations: <none>
 
 LATCH-1#1 Advisory

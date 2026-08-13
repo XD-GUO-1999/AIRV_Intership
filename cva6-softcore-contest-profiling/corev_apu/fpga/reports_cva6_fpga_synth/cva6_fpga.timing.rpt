@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2024 Advanced Micro Devices, Inc. All Rights Reserved.
 ---------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2024.1 (lin64) Build 5076996 Wed May 22 18:36:09 MDT 2024
-| Date         : Thu May 21 15:05:24 2026
+| Date         : Thu Aug 13 14:35:36 2026
 | Host         : EQI07362 running 64-bit Ubuntu 22.04.5 LTS
 | Command      : report_timing -nworst 1 -delay_type max -sort_by group -file reports_cva6_fpga_synth/cva6_fpga.timing.rpt
 | Design       : cva6_zybo_z7_20
@@ -12,16 +12,16 @@ Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2024 Advanc
 
 Timing Report
 
-Slack (MET) :             2.896ns  (required time - arrival time)
-  Source:                 i_ariane/i_cva6/issue_stage_i/i_scoreboard/commit_pointer_q_reg[0][0]/C
+Slack (MET) :             3.831ns  (required time - arrival time)
+  Source:                 i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_data_q_reg[size][0]/C
                             (rising edge-triggered cell FDCE clocked by clk_out1_xlnx_clk_gen  {rise@0.000ns fall@10.000ns period=20.000ns})
-  Destination:            i_ariane/i_cva6/issue_stage_i/i_scoreboard/mem_q_reg[0][sbe][bp][predict_address][0]/CE
-                            (rising edge-triggered cell FDCE clocked by clk_out1_xlnx_clk_gen  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Destination:            i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/gaxif_ms_addr_gen.addr_cnt_enb_reg[3]/R
+                            (rising edge-triggered cell FDRE clocked by clk_out1_xlnx_clk_gen  {rise@0.000ns fall@10.000ns period=20.000ns})
   Path Group:             clk_out1_xlnx_clk_gen
   Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            20.000ns  (clk_out1_xlnx_clk_gen rise@20.000ns - clk_out1_xlnx_clk_gen rise@0.000ns)
-  Data Path Delay:        16.678ns  (logic 3.021ns (18.114%)  route 13.657ns (81.886%))
-  Logic Levels:           19  (LUT2=2 LUT3=3 LUT4=1 LUT5=2 LUT6=11)
+  Data Path Delay:        15.388ns  (logic 6.706ns (43.579%)  route 8.682ns (56.421%))
+  Logic Levels:           36  (CARRY4=23 LUT1=1 LUT2=1 LUT3=1 LUT4=1 LUT5=3 LUT6=6)
   Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
     Destination Clock Delay (DCD):    -2.245ns = ( 17.755 - 20.000 ) 
     Source Clock Delay      (SCD):    -1.569ns
@@ -43,50 +43,107 @@ Slack (MET) :             2.896ns  (required time - arrival time)
                                                      -5.113    -3.054 r  i_xlnx_clk_gen/inst/mmcm_adv_inst/CLKOUT0
                          net (fo=1, unplaced)         0.800    -2.254    i_xlnx_clk_gen/inst/clk_out1_xlnx_clk_gen
                          BUFG (Prop_bufg_I_O)         0.101    -2.153 r  i_xlnx_clk_gen/inst/clkout1_buf/O
-                         net (fo=16259, unplaced)     0.584    -1.569    i_ariane/i_cva6/issue_stage_i/i_scoreboard/clk_out1
-                         FDCE                                         r  i_ariane/i_cva6/issue_stage_i/i_scoreboard/commit_pointer_q_reg[0][0]/C
+                         net (fo=16183, unplaced)     0.584    -1.569    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/clk_out1
+                         FDCE                                         r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_data_q_reg[size][0]/C
   -------------------------------------------------------------------    -------------------
-                         FDCE (Prop_fdce_C_Q)         0.478    -1.091 f  i_ariane/i_cva6/issue_stage_i/i_scoreboard/commit_pointer_q_reg[0][0]/Q
-                         net (fo=11, unplaced)        0.516    -0.575    i_ariane/i_cva6/issue_stage_i/i_scoreboard/commit_pointer_q_reg[0][1]_0[0]
-                         LUT2 (Prop_lut2_I0_O)        0.295    -0.280 f  i_ariane/i_cva6/issue_stage_i/i_scoreboard/speculative_read_pointer_q[1]_i_10/O
-                         net (fo=187, unplaced)       0.564     0.284    i_ariane/i_cva6/issue_stage_i/i_scoreboard/speculative_read_pointer_q[1]_i_10_n_1
-                         LUT4 (Prop_lut4_I2_O)        0.116     0.400 r  i_ariane/i_cva6/issue_stage_i/i_scoreboard/i___2_i_14/O
-                         net (fo=1, unplaced)         0.902     1.302    i_ariane/i_cva6/issue_stage_i/i_scoreboard/i___2_i_14_n_1
-                         LUT5 (Prop_lut5_I1_O)        0.124     1.426 f  i_ariane/i_cva6/issue_stage_i/i_scoreboard/i___2_i_5/O
-                         net (fo=48, unplaced)        0.983     2.409    i_ariane/i_cva6/issue_stage_i/i_scoreboard/wfi_q_reg_23
-                         LUT3 (Prop_lut3_I0_O)        0.148     2.557 f  i_ariane/i_cva6/issue_stage_i/i_scoreboard/dcsr_q[mprven]_i_7/O
-                         net (fo=4, unplaced)         1.135     3.692    i_ariane/i_cva6/issue_stage_i/i_scoreboard/csr_op_commit_csr[6]
-                         LUT6 (Prop_lut6_I1_O)        0.124     3.816 f  i_ariane/i_cva6/issue_stage_i/i_scoreboard/FSM_sequential_state_q[3]_i_22/O
-                         net (fo=7, unplaced)         0.937     4.753    i_ariane/i_cva6/issue_stage_i/i_scoreboard/dcsr_q[step]_i_19_0
-                         LUT6 (Prop_lut6_I2_O)        0.124     4.877 r  i_ariane/i_cva6/issue_stage_i/i_scoreboard/issue_cnt_q[2]_i_8/O
-                         net (fo=1, unplaced)         0.419     5.296    i_ariane/i_cva6/issue_stage_i/i_scoreboard/issue_cnt_q[2]_i_8_n_1
-                         LUT6 (Prop_lut6_I4_O)        0.124     5.420 f  i_ariane/i_cva6/issue_stage_i/i_scoreboard/issue_cnt_q[2]_i_2/O
-                         net (fo=14, unplaced)        0.953     6.373    i_ariane/i_cva6/csr_regfile_i/commit_ack
-                         LUT6 (Prop_lut6_I1_O)        0.124     6.497 f  i_ariane/i_cva6/csr_regfile_i/FSM_sequential_state_q[3]_i_9/O
-                         net (fo=5, unplaced)         0.477     6.974    i_ariane/i_cva6/issue_stage_i/i_scoreboard/set_debug_pc
-                         LUT6 (Prop_lut6_I4_O)        0.124     7.098 r  i_ariane/i_cva6/issue_stage_i/i_scoreboard/mem_q[0][sbe][result][31]_i_12/O
-                         net (fo=36, unplaced)        0.523     7.621    i_ariane/i_cva6/issue_stage_i/i_issue_read_operands/mult_valid_0
-                         LUT5 (Prop_lut5_I3_O)        0.124     7.745 r  i_ariane/i_cva6/issue_stage_i/i_issue_read_operands/mem_q[0][sbe][result][31]_i_10/O
-                         net (fo=10, unplaced)        0.492     8.237    i_ariane/i_cva6/issue_stage_i/i_scoreboard/flu_trans_id_ex_id[0]
-                         LUT6 (Prop_lut6_I4_O)        0.124     8.361 r  i_ariane/i_cva6/issue_stage_i/i_scoreboard/asid_to_be_flushed[0]_i_28/O
-                         net (fo=3, unplaced)         0.920     9.281    i_ariane/i_cva6/issue_stage_i/i_scoreboard/asid_to_be_flushed[0]_i_28_n_1
-                         LUT6 (Prop_lut6_I0_O)        0.124     9.405 f  i_ariane/i_cva6/issue_stage_i/i_scoreboard/vaddr_to_be_flushed[31]_i_20/O
-                         net (fo=1, unplaced)         0.902    10.307    i_ariane/i_cva6/id_stage_i/vaddr_to_be_flushed[0]_i_2_0
-                         LUT6 (Prop_lut6_I2_O)        0.124    10.431 r  i_ariane/i_cva6/id_stage_i/vaddr_to_be_flushed[31]_i_9/O
-                         net (fo=34, unplaced)        0.522    10.953    i_ariane/i_cva6/issue_stage_i/i_scoreboard/gen_arbiter.req_nodes_1
-                         LUT6 (Prop_lut6_I4_O)        0.124    11.077 f  i_ariane/i_cva6/issue_stage_i/i_scoreboard/issue_q[sbe][pc][31]_i_7/O
-                         net (fo=1, unplaced)         0.902    11.979    i_ariane/i_cva6/issue_stage_i/i_scoreboard/issue_q[sbe][pc][31]_i_7_n_1
-                         LUT6 (Prop_lut6_I1_O)        0.124    12.103 r  i_ariane/i_cva6/issue_stage_i/i_scoreboard/issue_q[sbe][pc][31]_i_5/O
-                         net (fo=2, unplaced)         0.460    12.563    i_ariane/i_cva6/id_stage_i/issue_ack_o19_out
-                         LUT6 (Prop_lut6_I4_O)        0.124    12.687 r  i_ariane/i_cva6/id_stage_i/issue_q[sbe][pc][31]_i_2/O
-                         net (fo=3, unplaced)         0.467    13.154    i_ariane/i_cva6/id_stage_i/issue_instr_issue_id
-                         LUT3 (Prop_lut3_I0_O)        0.124    13.278 r  i_ariane/i_cva6/id_stage_i/issue_cnt_q[2]_i_3/O
-                         net (fo=9, unplaced)         0.490    13.768    i_ariane/i_cva6/issue_stage_i/i_scoreboard/issue_pointer_q_reg[1]_0
-                         LUT3 (Prop_lut3_I1_O)        0.124    13.892 r  i_ariane/i_cva6/issue_stage_i/i_scoreboard/mem_q[0][sbe][pc][31]_i_1/O
-                         net (fo=52, unplaced)        0.532    14.424    i_ariane/i_cva6/issue_stage_i/i_scoreboard/mem_q[0][sbe][pc][31]_i_1_n_1
-                         LUT2 (Prop_lut2_I0_O)        0.124    14.548 r  i_ariane/i_cva6/issue_stage_i/i_scoreboard/mem_q[0][sbe][result][31]_i_1/O
-                         net (fo=64, unplaced)        0.561    15.109    i_ariane/i_cva6/issue_stage_i/i_scoreboard/mem_q[0][sbe][result][31]_i_1_n_1
-                         FDCE                                         r  i_ariane/i_cva6/issue_stage_i/i_scoreboard/mem_q_reg[0][sbe][bp][predict_address][0]/CE
+                         FDCE (Prop_fdce_C_Q)         0.478    -1.091 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_data_q_reg[size][0]/Q
+                         net (fo=1, unplaced)         0.741    -0.350    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_data_q_reg[size_n_1_][0]
+                         LUT3 (Prop_lut3_I0_O)        0.319    -0.031 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/size_q[0]_i_1/O
+                         net (fo=11, unplaced)        0.948     0.917    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_data_q_reg[size][0]_0
+                         LUT4 (Prop_lut4_I1_O)        0.124     1.041 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_i_269/O
+                         net (fo=1, unplaced)         0.000     1.041    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_i_269_n_1
+                         CARRY4 (Prop_carry4_S[0]_CO[3])
+                                                      0.513     1.554 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_256/CO[3]
+                         net (fo=1, unplaced)         0.009     1.563    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_256_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     1.680 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_242/CO[3]
+                         net (fo=1, unplaced)         0.000     1.680    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_242_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     1.797 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_223/CO[3]
+                         net (fo=1, unplaced)         0.000     1.797    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_223_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     1.914 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_203/CO[3]
+                         net (fo=1, unplaced)         0.000     1.914    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_203_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     2.031 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_183/CO[3]
+                         net (fo=1, unplaced)         0.000     2.031    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_183_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     2.148 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_163/CO[3]
+                         net (fo=1, unplaced)         0.000     2.148    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_163_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     2.265 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_143/CO[3]
+                         net (fo=1, unplaced)         0.000     2.265    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_143_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     2.382 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_125/CO[3]
+                         net (fo=1, unplaced)         0.000     2.382    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_125_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     2.499 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_109/CO[3]
+                         net (fo=1, unplaced)         0.000     2.499    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_109_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     2.616 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_95/CO[3]
+                         net (fo=1, unplaced)         0.000     2.616    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_95_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     2.733 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_83/CO[3]
+                         net (fo=1, unplaced)         0.000     2.733    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_83_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     2.850 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_71/CO[3]
+                         net (fo=1, unplaced)         0.000     2.850    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_71_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     2.967 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_59/CO[3]
+                         net (fo=1, unplaced)         0.000     2.967    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_59_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     3.084 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_47/CO[3]
+                         net (fo=1, unplaced)         0.000     3.084    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_47_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     3.201 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_35/CO[3]
+                         net (fo=1, unplaced)         0.000     3.201    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_35_n_1
+                         CARRY4 (Prop_carry4_CI_O[3])
+                                                      0.331     3.532 f  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_23/O[3]
+                         net (fo=1, unplaced)         0.618     4.150    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_23_n_5
+                         LUT1 (Prop_lut1_I0_O)        0.307     4.457 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_i_9__2/O
+                         net (fo=1, unplaced)         0.000     4.457    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_i_9__2_n_1
+                         CARRY4 (Prop_carry4_S[3]_CO[3])
+                                                      0.376     4.833 r  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_4/CO[3]
+                         net (fo=1, unplaced)         0.918     5.751    i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_reg_i_4_n_1
+                         LUT6 (Prop_lut6_I0_O)        0.124     5.875 f  i_axi_xbar/i_xbar/gen_mst_port_mux[0].i_axi_mux/gen_mux.i_aw_spill_reg/spill_register_flushable_i/gen_spill_reg.b_full_q_i_2__27/O
+                         net (fo=3, unplaced)         0.467     6.342    i_axi_riscv_atomics/i_atomics/i_amos/aw_valid_reg_0
+                         LUT6 (Prop_lut6_I1_O)        0.124     6.466 f  i_axi_riscv_atomics/i_atomics/i_amos/w_cnt_q[0]_i_3/O
+                         net (fo=7, unplaced)         0.484     6.950    i_axi_riscv_atomics/i_atomics/i_lrsc/w_cnt_q_reg[0]
+                         LUT6 (Prop_lut6_I1_O)        0.124     7.074 r  i_axi_riscv_atomics/i_atomics/i_lrsc/aw_ready_i_73/O
+                         net (fo=68, unplaced)        0.539     7.613    i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/art_check_id[0]
+                         LUT6 (Prop_lut6_I4_O)        0.124     7.737 r  i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_i_132/O
+                         net (fo=1, unplaced)         0.902     8.639    i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_i_132_n_1
+                         LUT5 (Prop_lut5_I2_O)        0.124     8.763 r  i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_i_100/O
+                         net (fo=1, unplaced)         0.449     9.212    i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_i_100_n_1
+                         LUT6 (Prop_lut6_I5_O)        0.124     9.336 r  i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_i_50/O
+                         net (fo=1, unplaced)         0.000     9.336    i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_i_50_n_1
+                         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.533     9.869 r  i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_reg_i_24/CO[3]
+                         net (fo=1, unplaced)         0.009     9.878    i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_reg_i_24_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117     9.995 r  i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_reg_i_19/CO[3]
+                         net (fo=1, unplaced)         0.000     9.995    i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_reg_i_19_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117    10.112 r  i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_reg_i_18/CO[3]
+                         net (fo=1, unplaced)         0.000    10.112    i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_reg_i_18_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117    10.229 r  i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_reg_i_15/CO[3]
+                         net (fo=1, unplaced)         0.000    10.229    i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_reg_i_15_n_1
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.117    10.346 r  i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_reg_i_8/CO[3]
+                         net (fo=1, unplaced)         0.000    10.346    i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_reg_i_8_n_1
+                         CARRY4 (Prop_carry4_CI_CO[1])
+                                                      0.179    10.525 f  i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/aw_ready_reg_i_4/CO[1]
+                         net (fo=5, unplaced)         0.340    10.865    i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/check_res_o0
+                         LUT5 (Prop_lut5_I1_O)        0.332    11.197 f  i_axi_riscv_atomics/i_atomics/i_lrsc/i_art/i_xlnx_blk_mem_gen_i_14/O
+                         net (fo=6, unplaced)         0.481    11.678    i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/axi_wr_fsm/s_axi_awvalid
+                         LUT2 (Prop_lut2_I0_O)        0.116    11.794 f  i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/axi_wr_fsm/gaxif_ms_addr_gen.num_of_bytes_r[3]_i_3/O
+                         net (fo=1, unplaced)         0.449    12.243    i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/axi_wr_fsm/gaxif_ms_addr_gen.num_of_bytes_r[3]_i_3_n_0
+                         LUT6 (Prop_lut6_I0_O)        0.124    12.367 f  i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/axi_wr_fsm/gaxif_ms_addr_gen.num_of_bytes_r[3]_i_1/O
+                         net (fo=37, unplaced)        0.524    12.891    i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/axi_wr_fsm/addr_en_c
+                         LUT5 (Prop_lut5_I0_O)        0.124    13.015 r  i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/axi_wr_fsm/gaxif_ms_addr_gen.addr_cnt_enb[7]_i_1/O
+                         net (fo=5, unplaced)         0.804    13.819    i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/axi_wr_fsm_n_2
+                         FDRE                                         r  i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/gaxif_ms_addr_gen.addr_cnt_enb_reg[3]/R
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_out1_xlnx_clk_gen rise edge)
@@ -99,16 +156,16 @@ Slack (MET) :             2.896ns  (required time - arrival time)
                                                      -5.378    16.466 r  i_xlnx_clk_gen/inst/mmcm_adv_inst/CLKOUT0
                          net (fo=1, unplaced)         0.760    17.225    i_xlnx_clk_gen/inst/clk_out1_xlnx_clk_gen
                          BUFG (Prop_bufg_I_O)         0.091    17.316 r  i_xlnx_clk_gen/inst/clkout1_buf/O
-                         net (fo=16259, unplaced)     0.439    17.755    i_ariane/i_cva6/issue_stage_i/i_scoreboard/clk_out1
-                         FDCE                                         r  i_ariane/i_cva6/issue_stage_i/i_scoreboard/mem_q_reg[0][sbe][bp][predict_address][0]/C
+                         net (fo=16183, unplaced)     0.439    17.755    i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/s_aclk
+                         FDRE                                         r  i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/gaxif_ms_addr_gen.addr_cnt_enb_reg[3]/C
                          clock pessimism              0.531    18.286    
                          clock uncertainty           -0.079    18.206    
-                         FDCE (Setup_fdce_C_CE)      -0.202    18.004    i_ariane/i_cva6/issue_stage_i/i_scoreboard/mem_q_reg[0][sbe][bp][predict_address][0]
+                         FDRE (Setup_fdre_C_R)       -0.557    17.649    i_xlnx_blk_mem_gen/U0/inst_blk_mem_gen/gnbram.gaxibmg.axi_wr_fsm/gaxif_ms_addr_gen.addr_cnt_enb_reg[3]
   -------------------------------------------------------------------
-                         required time                         18.004    
-                         arrival time                         -15.109    
+                         required time                         17.649    
+                         arrival time                         -13.819    
   -------------------------------------------------------------------
-                         slack                                  2.896    
+                         slack                                  3.831    
 
 Slack (MET) :             5.757ns  (required time - arrival time)
   Source:                 i_dmi_jtag/i_dmi_jtag_tap/td_o_reg/C
@@ -193,7 +250,7 @@ Slack (MET) :             17.010ns  (required time - arrival time)
                                                      -5.113    -3.054 r  i_xlnx_clk_gen/inst/mmcm_adv_inst/CLKOUT0
                          net (fo=1, unplaced)         0.800    -2.254    i_xlnx_clk_gen/inst/clk_out1_xlnx_clk_gen
                          BUFG (Prop_bufg_I_O)         0.101    -2.153 r  i_xlnx_clk_gen/inst/clkout1_buf/O
-                         net (fo=16259, unplaced)     0.584    -1.569    i_axi_dwidth_converter_dm_slave/inst/gen_downsizer.gen_simple_downsizer.axi_downsizer_inst/USE_READ.read_addr_inst/cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/rstblk/clk
+                         net (fo=16183, unplaced)     0.584    -1.569    i_axi_dwidth_converter_dm_slave/inst/gen_downsizer.gen_simple_downsizer.axi_downsizer_inst/USE_READ.read_addr_inst/cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/rstblk/clk
                          FDRE                                         r  i_axi_dwidth_converter_dm_slave/inst/gen_downsizer.gen_simple_downsizer.axi_downsizer_inst/USE_READ.read_addr_inst/cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/rstblk/ngwrdrst.grst.g7serrst.gnsckt_wrst.gcc_rst.sckt_wr_rst_cc_reg[1]/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_fdre_C_Q)         0.478    -1.091 f  i_axi_dwidth_converter_dm_slave/inst/gen_downsizer.gen_simple_downsizer.axi_downsizer_inst/USE_READ.read_addr_inst/cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/rstblk/ngwrdrst.grst.g7serrst.gnsckt_wrst.gcc_rst.sckt_wr_rst_cc_reg[1]/Q
@@ -213,7 +270,7 @@ Slack (MET) :             17.010ns  (required time - arrival time)
                                                      -5.378    16.466 r  i_xlnx_clk_gen/inst/mmcm_adv_inst/CLKOUT0
                          net (fo=1, unplaced)         0.760    17.225    i_xlnx_clk_gen/inst/clk_out1_xlnx_clk_gen
                          BUFG (Prop_bufg_I_O)         0.091    17.316 r  i_xlnx_clk_gen/inst/clkout1_buf/O
-                         net (fo=16259, unplaced)     0.439    17.755    i_axi_dwidth_converter_dm_slave/inst/gen_downsizer.gen_simple_downsizer.axi_downsizer_inst/USE_READ.read_addr_inst/cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/clk
+                         net (fo=16183, unplaced)     0.439    17.755    i_axi_dwidth_converter_dm_slave/inst/gen_downsizer.gen_simple_downsizer.axi_downsizer_inst/USE_READ.read_addr_inst/cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/clk
                          FDPE                                         r  i_axi_dwidth_converter_dm_slave/inst/gen_downsizer.gen_simple_downsizer.axi_downsizer_inst/USE_READ.read_addr_inst/cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/aempty_fwft_fb_i_reg/C
                          clock pessimism              0.531    18.286    
                          clock uncertainty           -0.079    18.206    

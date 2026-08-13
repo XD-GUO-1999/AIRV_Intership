@@ -4,10 +4,10 @@
 <!-- Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.                   -->
 <!-- Copyright 2022-2024 Advanced Micro Devices, Inc. All Rights Reserved.   -->
 
-<Project Product="Vivado" Version="7" Minor="67" Path="/home/imtuser/AIRV/cva6-softcore-contest/corev_apu/fpga/cva6_fpga.xpr">
+<Project Product="Vivado" Version="7" Minor="67" Path="/home/imtuser/AIRV/cva6-softcore-contest-profiling/corev_apu/fpga/cva6_fpga.xpr">
   <DefaultLaunch Dir="$PRUNDIR"/>
   <Configuration>
-    <Option Name="Id" Val="22a3083df4b9486d88acd2440289c440"/>
+    <Option Name="Id" Val="bba6eafd9e5d4eb4a92ae5eb77c05254"/>
     <Option Name="Part" Val="xc7z020clg400-1"/>
     <Option Name="CompiledLibDir" Val="$PCACHEDIR/compile_simlib"/>
     <Option Name="CompiledLibDirXSim" Val=""/>

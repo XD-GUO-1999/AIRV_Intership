@@ -21,7 +21,7 @@ else
 fi
 export LD_LIBRARY_PATH
 
-HD_PWD='/home/imtuser/AIRV/cva6-softcore-contest/corev_apu/fpga/cva6_fpga.runs/impl_1'
+HD_PWD='/home/imtuser/AIRV/cva6-softcore-contest-profiling/corev_apu/fpga/cva6_fpga.runs/impl_1'
 cd "$HD_PWD"
 
 HD_LOG=runme.log

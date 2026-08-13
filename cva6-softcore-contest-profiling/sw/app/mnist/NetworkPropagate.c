@@ -1,8 +1,5 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdint.h>
-
-#include "util.h"
 
 #include "env.h"
 #include "mem_info.h"
@@ -14,90 +11,6 @@
 
 
 static DATA_T mem[MEMORY_SIZE];
-
-
-#ifdef PROFILE_NON_MAC
-
-typedef struct {
-    uint64_t cycles;
-    uint64_t instructions;
-} ProfileCounter_T;
-
-typedef struct {
-    uint32_t cycle_start;
-    uint32_t inst_start;
-} ProfileStart_T;
-
-static ProfileCounter_T prof_conv1_total = {0, 0};
-static ProfileCounter_T prof_conv1_mac   = {0, 0};
-static ProfileCounter_T prof_conv2_total = {0, 0};
-static ProfileCounter_T prof_conv2_mac   = {0, 0};
-static ProfileCounter_T prof_fc1_total   = {0, 0};
-static ProfileCounter_T prof_fc1_mac     = {0, 0};
-static ProfileCounter_T prof_fc2_total   = {0, 0};
-static ProfileCounter_T prof_fc2_mac     = {0, 0};
-
-static inline ProfileStart_T profile_start(void)
-{
-    ProfileStart_T start;
-    start.inst_start  = (uint32_t)read_csr(minstret);
-    start.cycle_start = (uint32_t)read_csr(mcycle);
-    return start;
-}
-
-static inline void profile_stop(ProfileCounter_T* counter,
-                                ProfileStart_T start)
-{
-    const uint32_t cycle_end = (uint32_t)read_csr(mcycle);
-    const uint32_t inst_end  = (uint32_t)read_csr(minstret);
-
-    /* Unsigned subtraction also handles a single 32-bit counter wrap. */
-    counter->cycles += (uint32_t)(cycle_end - start.cycle_start);
-    counter->instructions += (uint32_t)(inst_end - start.inst_start);
-}
-
-static void print_profile_line(const char* name,
-                               const ProfileCounter_T* total,
-                               const ProfileCounter_T* mac)
-{
-    const uint64_t non_mac_cycles = total->cycles - mac->cycles;
-    const uint64_t non_mac_inst = total->instructions - mac->instructions;
-
-    const unsigned long non_mac_cycle_pct =
-        (total->cycles != 0)
-            ? (unsigned long)((non_mac_cycles * 100ULL) / total->cycles)
-            : 0UL;
-
-    const unsigned long non_mac_inst_pct =
-        (total->instructions != 0)
-            ? (unsigned long)((non_mac_inst * 100ULL) / total->instructions)
-            : 0UL;
-
-    printf("%s:\n", name);
-    printf("  total      : %lu cycles, %lu instructions\n",
-           (unsigned long)total->cycles,
-           (unsigned long)total->instructions);
-    printf("  MAC region : %lu cycles, %lu instructions\n",
-           (unsigned long)mac->cycles,
-           (unsigned long)mac->instructions);
-    printf("  non-MAC    : %lu cycles, %lu instructions\n",
-           (unsigned long)non_mac_cycles,
-           (unsigned long)non_mac_inst);
-    printf("  non-MAC %%  : %lu%% cycles, %lu%% instructions\n",
-           non_mac_cycle_pct,
-           non_mac_inst_pct);
-}
-
-void print_non_mac_profile(void)
-{
-    printf("\n=== Layer profiling ===\n");
-    print_profile_line("Conv1", &prof_conv1_total, &prof_conv1_mac);
-    print_profile_line("Conv2", &prof_conv2_total, &prof_conv2_mac);
-    print_profile_line("FC1",   &prof_fc1_total,   &prof_fc1_mac);
-    print_profile_line("FC2",   &prof_fc2_total,   &prof_fc2_mac);
-}
-
-#endif
 
 static int max(int lhs, int rhs) {
         return (lhs >= rhs)?lhs:rhs;
@@ -114,124 +27,6 @@ static int clamp(int v, int lo, int hi) {
         return v;
     }
 }
-
-static void macsOnRange_with_mac4(const UDATA_T* __restrict inputs,
-                        const WDATA_T* __restrict weights,
-                        SUM_T* __restrict weightedSum,
-                        int nb_iterations)
-{
-    int32_t sum = *weightedSum;
-    int iter = 0;
-
-    for (; iter <= nb_iterations - 4; iter += 4) {
-        const UDATA_T *p_in = inputs + iter;
-        const UDATA_T *p_wt = weights + iter;
-        
-        asm volatile(
-        "lw t1, 0(%[p_in]) \n\t"
-        "lw t2, 0(%[p_wt]) \n\t"
-        "mac4 %[sum], t1, t2 \n\t"
-        : [sum] "+r" (sum)
-        : [p_in] "r" (p_in), 
-        [p_wt] "r" (p_wt)
-        : "t1", "t2"
-        );
-    }
-
-    for (; iter < nb_iterations; ++iter)
-        {
-            sum += inputs[iter] * weights[iter];
-        }
-
-     *weightedSum = sum;
-}
-
-static void macsOnRange_no_alined(const UDATA_T* __restrict inputs,
-                        const WDATA_T* __restrict weights,
-                        SUM_T* __restrict weightedSum,
-                        int nb_iterations)
-{
-    int32_t sum = *weightedSum;
-    int iter = 0;
-
-    for (; iter <= nb_iterations - 4; iter += 4) {
-        const UDATA_T *p_in = inputs + iter;
-        const UDATA_T *p_wt = weights + iter;
-
-        uintptr_t addr_in = (uintptr_t)p_in;
-        uintptr_t addr_wt = (uintptr_t)p_wt;
-        
-        if(((addr_in & 0x3) == 0) && ((addr_wt & 0x3) == 0)){
-            asm volatile(
-                "lw t1, 0(%[p_in]) \n\t"
-                "lw t2, 0(%[p_wt]) \n\t"
-                "mac4 %[sum], t1, t2 \n\t"
-                : [sum] "+r" (sum)
-                : [p_in] "r" (p_in), 
-                [p_wt] "r" (p_wt)
-                : "t1", "t2", "memory"
-            );
-        }else{
-            sum += inputs[iter + 0] * weights[iter + 0];
-            sum += inputs[iter + 1] * weights[iter + 1];
-            sum += inputs[iter + 2] * weights[iter + 2];
-            sum += inputs[iter + 3] * weights[iter + 3];
-        }
-    }
-
-    for (; iter < nb_iterations; ++iter)
-        {
-            sum += inputs[iter] * weights[iter];
-        }
-
-     *weightedSum = sum;
-}
-
-static void macsOnRange_no_alined_for_fc2(const UDATA_T* __restrict inputs,
-                        const WDATA_T* __restrict weights,
-                        SUM_T* __restrict weightedSum,
-                        int nb_iterations)
-{
-    int32_t sum = *weightedSum;
-    int iter = 0;
-
-    uintptr_t addr_wt = (uintptr_t)weights;
-    if((addr_wt & 0x3) == 0){
-        for (; iter <= nb_iterations - 4; iter += 4) {
-            const UDATA_T *p_in = inputs + iter;
-            const UDATA_T *p_wt = weights + iter;
-
-            asm volatile(
-                "lw t1, 0(%[p_in]) \n\t"
-                "lw t2, 0(%[p_wt]) \n\t"
-                "mac4 %[sum], t1, t2 \n\t"
-                : [sum] "+r" (sum)
-                : [p_in] "r" (p_in), 
-                [p_wt] "r" (p_wt)
-                : "t1", "t2", "memory"
-            );
-        }
-
-        for (; iter < nb_iterations; ++iter)
-            {
-                sum += inputs[iter] * weights[iter];
-            }
-    }else{
-        for (; iter <= nb_iterations - 4; iter += 4) {
-            sum += inputs[iter + 0] * weights[iter + 0];
-            sum += inputs[iter + 1] * weights[iter + 1];
-            sum += inputs[iter + 2] * weights[iter + 2];
-            sum += inputs[iter + 3] * weights[iter + 3];
-        }
-
-        for (; iter < nb_iterations; ++iter) {
-            sum += inputs[iter] * weights[iter];
-        }
-    }
-
-     *weightedSum = sum;
-}
-
 
 static void macsOnRange(const UDATA_T* __restrict inputs,
                         const WDATA_T* __restrict weights,
@@ -302,166 +97,6 @@ static void convcellPropagate1(
         = (CHANNELS_WIDTH - KERNEL_WIDTH + STRIDE_X) / STRIDE_X;
 
     for (int oy = 0; oy < OUTPUTS_HEIGHT; ++oy) {
-        const int syMin = (PADDING_Y == 0) ? 0 //syMin is always 0, because there is no padding here
-            : max(PADDING_Y - (oy * STRIDE_Y), 0);
-        const int syMax = (PADDING_Y == 0 //syMax is always KERNEL_HEIGHT, because CHANNELS_HEIGHT + PADDING_Y - (oy * STRIDE_Y) >= KERNEL_HEIGHT
-                && OUTPUTS_HEIGHT == OUTPUTS_HEIGHT_NOPAD) ? KERNEL_HEIGHT
-            : clamp(CHANNELS_HEIGHT + PADDING_Y - (oy * STRIDE_Y), 
-                    0, KERNEL_HEIGHT); //clamp helps us to know if CHANNELS_HEIGHT + PADDING_Y - (oy * STRIDE_Y) is between 0-KERNEL_HEIGHT
-        const int iy = (oy * STRIDE_Y) - PADDING_Y; 
-
-        for (int ox = 0; ox < OUTPUTS_WIDTH; ++ox) {
-            for (int output = 0; output < NB_OUTPUTS; ++output) { //accoding to the number of output to define the loop number
-                // moved to inner loop for collapsing -->
-                const int sxMin = (PADDING_X == 0) ? 0 //syMin is always 0, because there is no padding here
-                    : max(PADDING_X - (ox * STRIDE_X), 0);
-                const int sxMax = (PADDING_X == 0 //sxMax is always KERNEL_HEIGHT, because CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_Y) >= KERNEL_WIDTH
-                        && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
-                            ? KERNEL_WIDTH
-                    : clamp(CHANNELS_WIDTH + PADDING_X - (ox * STRIDE_X), 
-                            0, KERNEL_WIDTH);
-                const int ix = (ox * STRIDE_X) - PADDING_X;
-
-                const int oPos = (ox + OUTPUTS_WIDTH * oy); //output position
-                int oOffset = OUTPUT_MEM_STRIDE * oPos; 
-
-                if (OUTPUT_MEM_WRAP_SIZE > 0 && oOffset >= OUTPUT_MEM_CONT_SIZE) {
-                    oOffset += OUTPUT_MEM_WRAP_OFFSET - OUTPUT_MEM_CONT_OFFSET
-                                - OUTPUT_MEM_CONT_SIZE;
-                }
-                // when the oOffset surpasses the size of OUTPUT_MEM_CONT_SIZE and there is wapping memory, adjust oOffset into wapping memory
-                // <--
-
-                SUM_T weightedSum = biasses[output]; // add biasses of kernel firstly
-
-#ifdef PROFILE_NON_MAC
-                const ProfileStart_T mac_profile_start = profile_start();
-#endif
-
-                for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) { //in the kernel, start by line
-                    if ((PADDING_Y != 0
-                            || OUTPUTS_HEIGHT != OUTPUTS_HEIGHT_NOPAD)
-                        && sy >= syMax - syMin)
-                    {
-                        break; // when there is padding and sy surpass the size of kernel, break
-                    }
-
-                    const int iPos = ((sxMin + ix)
-                                        + CHANNELS_WIDTH * (iy + syMin + sy)); // calculate the input position
-                    int iOffset = INPUT_MEM_STRIDE * iPos;
-
-                    // Wrapping cannot occur in the middle of a line, except if
-                    // there is only one line (1D)!
-                    bool wrapInRange = false;
-
-                    if (INPUT_MEM_WRAP_SIZE > 0
-                        && iOffset >= INPUT_MEM_CONT_SIZE)
-                    {
-                        iOffset += INPUT_MEM_WRAP_OFFSET - INPUT_MEM_CONT_OFFSET
-                                    - INPUT_MEM_CONT_SIZE;
-                    }
-                     // when the iOffset surpasses the size of INTPUT_MEM_CONT_SIZE and there is wapping memory, adjust iOffset into wapping memory
-                    else if (INPUT_MEM_WRAP_SIZE > 0 && KERNEL_WIDTH > 1
-                        && CHANNELS_HEIGHT == 1 // single line (1D)!
-                        && iOffset + KERNEL_WIDTH * NB_CHANNELS
-                            > INPUT_MEM_CONT_SIZE)
-                    {
-                        wrapInRange = true;//when there is wrapping memory, the size of kernel is not 1*1, the input is 1D, 
-                                        //and ioffset + a line of data in kernel surpass the continue size,
-                                        //the wrapInRange will be true, which means that the data in memory is not continue
-                                        //it will surpass the boundary of contiguous memory
-                    }
-
-                    const int wOffset = NB_CHANNELS * (sxMin
-                        + KERNEL_WIDTH * (syMin + sy + KERNEL_HEIGHT * output));
-
-                    if (!wrapInRange && (NB_CHANNELS == INPUT_MEM_STRIDE //it does not surpass the boundary of contiguous memory, there is no gap between
-                                                                         // two pixels
-                        && ((PADDING_X == 0 && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD) // there is no padding
-                                || sxMax - sxMin == KERNEL_WIDTH)))                  // or there is padding but the kernel is not cut by the padding (the kernel is whole)
-                                                                                     // to make sure the kernel in x is valid, we can use fonction direcetly
-                    {
-                        macsOnRange_no_alined(
-                            inputs + iOffset, 
-                            weights + wOffset, 
-                            &weightedSum,
-                            KERNEL_WIDTH * NB_CHANNELS);
-                    }
-                    else {
-                        for (int sx = 0; sx < KERNEL_WIDTH; ++sx) {
-                            if ((PADDING_X != 0
-                                    || OUTPUTS_WIDTH != OUTPUTS_WIDTH_NOPAD)
-                                && sx >= sxMax - sxMin)
-                            {
-                                break; // when there is padding and sy surpass the size of kernel, break
-                            }
-
-                            int iOffsetInRange = iOffset
-                                + sx * INPUT_MEM_STRIDE;
-
-                            if (wrapInRange
-                                && iOffsetInRange >= INPUT_MEM_CONT_SIZE)
-                            {
-                                iOffsetInRange += INPUT_MEM_WRAP_OFFSET
-                                            - INPUT_MEM_CONT_OFFSET
-                                            - INPUT_MEM_CONT_SIZE;
-                            }
-
-                            macsOnRange_no_alined(
-                                // same input line so no wrapping can occur
-                                inputs + iOffsetInRange,  //index of input in memory
-                                weights + wOffset + sx * NB_CHANNELS,  //index of weight in memory
-                                &weightedSum,
-                                NB_CHANNELS);
-                        }
-                    }
-                }
-
-#ifdef PROFILE_NON_MAC
-                profile_stop(&prof_conv1_mac, mac_profile_start);
-#endif
-
-                outputs[oOffset + output]
-                    = sat(weightedSum, output, ACTIVATION, rescaling);
-            }
-        }
-    }
-}
-
-
-static void convcellPropagate2(
-    const UDATA_T* __restrict inputs,
-    UDATA_T* __restrict outputs,
-    const BDATA_T* __restrict biasses,
-    const WDATA_T* __restrict weights,
-    int rescaling,
-    int NB_CHANNELS, 
-    int CHANNELS_HEIGHT, int CHANNELS_WIDTH,
-    int NB_OUTPUTS,
-    int OUTPUTS_HEIGHT, int OUTPUTS_WIDTH,
-    int PADDING_Y, int PADDING_X,
-    int STRIDE_Y, int STRIDE_X,
-    int KERNEL_HEIGHT, int KERNEL_WIDTH,
-    ActivationFunction_T ACTIVATION,
-    // Memory mapping: inputs
-    int INPUT_MEM_CONT_OFFSET,
-    int INPUT_MEM_CONT_SIZE,
-    int INPUT_MEM_WRAP_OFFSET,
-    int INPUT_MEM_WRAP_SIZE,
-    int INPUT_MEM_STRIDE,
-    // Memory mapping: outputs
-    int OUTPUT_MEM_CONT_OFFSET,
-    int OUTPUT_MEM_CONT_SIZE,
-    int OUTPUT_MEM_WRAP_OFFSET,
-    int OUTPUT_MEM_WRAP_SIZE,
-    int OUTPUT_MEM_STRIDE)
-{
-    int OUTPUTS_HEIGHT_NOPAD
-        = (CHANNELS_HEIGHT - KERNEL_HEIGHT + STRIDE_Y) / STRIDE_Y;
-    int OUTPUTS_WIDTH_NOPAD
-        = (CHANNELS_WIDTH - KERNEL_WIDTH + STRIDE_X) / STRIDE_X;
-
-    for (int oy = 0; oy < OUTPUTS_HEIGHT; ++oy) {
         const int syMin = (PADDING_Y == 0) ? 0
             : max(PADDING_Y - (oy * STRIDE_Y), 0);
         const int syMax = (PADDING_Y == 0
@@ -492,10 +127,6 @@ static void convcellPropagate2(
                 // <--
 
                 SUM_T weightedSum = biasses[output];
-
-#ifdef PROFILE_NON_MAC
-                const ProfileStart_T mac_profile_start = profile_start();
-#endif
 
                 for (int sy = 0; sy < KERNEL_HEIGHT; ++sy) {
                     if ((PADDING_Y != 0
@@ -535,7 +166,7 @@ static void convcellPropagate2(
                             && OUTPUTS_WIDTH == OUTPUTS_WIDTH_NOPAD)
                                 || sxMax - sxMin == KERNEL_WIDTH)))
                     {
-                        macsOnRange_with_mac4(
+                        macsOnRange(
                             inputs + iOffset, 
                             weights + wOffset, 
                             &weightedSum,KERNEL_WIDTH * NB_CHANNELS);
@@ -560,7 +191,7 @@ static void convcellPropagate2(
                                             - INPUT_MEM_CONT_SIZE;
                             }
 
-                            macsOnRange_with_mac4(
+                            macsOnRange(
                                 // same input line so no wrapping can occur
                                 inputs + iOffsetInRange, 
                                 weights + wOffset + sx * NB_CHANNELS, 
@@ -569,17 +200,12 @@ static void convcellPropagate2(
                     }
                 }
 
-#ifdef PROFILE_NON_MAC
-                profile_stop(&prof_conv2_mac, mac_profile_start);
-#endif
-
                 outputs[oOffset + output]
                     = sat(weightedSum, output, ACTIVATION, rescaling);
             }
         }
     }
 }
-
 
 static void fccellPropagateUDATA_T(
     const UDATA_T* __restrict inputs,
@@ -612,10 +238,6 @@ static void fccellPropagateUDATA_T(
     for (int och = 0; och < NB_OUTPUTS; och++) {
         SUM_T weightedSum = biasses[och];
 
-#ifdef PROFILE_NON_MAC
-        const ProfileStart_T mac_profile_start = profile_start();
-#endif
-
         for (int iy = 0; iy < CHANNELS_HEIGHT; ++iy) {
             const int iPos = (CHANNELS_WIDTH * iy);
             int iOffset = INPUT_MEM_STRIDE * iPos;
@@ -640,7 +262,7 @@ static void fccellPropagateUDATA_T(
                                     * (iy + CHANNELS_HEIGHT * och);
 
             if (!wrapInRange && INPUT_MEM_STRIDE == NB_CHANNELS) {
-                macsOnRange_with_mac4(
+                macsOnRange(
                     inputs + iOffset, 
                     weights + wOffset, 
                     &weightedSum, NB_CHANNELS * CHANNELS_WIDTH);
@@ -657,17 +279,13 @@ static void fccellPropagateUDATA_T(
                                     - INPUT_MEM_CONT_SIZE;
                     }
 
-                    macsOnRange_with_mac4(
+                    macsOnRange(
                         inputs + iOffsetInRange, 
                         weights + wOffset + ix * NB_CHANNELS, 
                         &weightedSum, NB_CHANNELS);
                 }
             }
         }
-
-#ifdef PROFILE_NON_MAC
-        profile_stop(&prof_fc1_mac, mac_profile_start);
-#endif
 
         outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
     }
@@ -704,10 +322,6 @@ static void fccellPropagateDATA_T(
     for (int och = 0; och < NB_OUTPUTS; och++) {
         SUM_T weightedSum = biasses[och];
 
-#ifdef PROFILE_NON_MAC
-        const ProfileStart_T mac_profile_start = profile_start();
-#endif
-
         for (int iy = 0; iy < CHANNELS_HEIGHT; ++iy) {
             const int iPos = (CHANNELS_WIDTH * iy);
             int iOffset = INPUT_MEM_STRIDE * iPos;
@@ -732,7 +346,7 @@ static void fccellPropagateDATA_T(
                                     * (iy + CHANNELS_HEIGHT * och);
 
             if (!wrapInRange && INPUT_MEM_STRIDE == NB_CHANNELS) {
-                macsOnRange_no_alined_for_fc2(
+                macsOnRange(
                     inputs + iOffset, 
                     weights + wOffset, 
                     &weightedSum, NB_CHANNELS * CHANNELS_WIDTH);
@@ -749,17 +363,13 @@ static void fccellPropagateDATA_T(
                                     - INPUT_MEM_CONT_SIZE;
                     }
 
-                    macsOnRange_no_alined_for_fc2(
+                    macsOnRange(
                         inputs + iOffsetInRange, 
                         weights + wOffset + ix * NB_CHANNELS, 
                         &weightedSum, NB_CHANNELS);
                 }
             }
         }
-
-#ifdef PROFILE_NON_MAC
-        profile_stop(&prof_fc2_mac, mac_profile_start);
-#endif
 
         outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
     }
@@ -824,19 +434,11 @@ void propagate(const UDATA_T* inputs, Target_T* outputs, UDATA_T* maxPropagate_v
     const Tick_T start_conv1 = tick();
 #endif
 
-#ifdef PROFILE_NON_MAC
-    const ProfileStart_T conv1_profile_start = profile_start();
-#endif
-
     convcellPropagate1(inputs , conv1_output, conv1_biases, conv1_weights, 8,
     CONV1_NB_CHANNELS, CONV1_CHANNELS_HEIGHT, CONV1_CHANNELS_WIDTH, CONV1_NB_OUTPUTS, CONV1_OUTPUTS_HEIGHT, 
     CONV1_OUTPUTS_WIDTH, CONV1_PADDING_Y, CONV1_PADDING_X, CONV1_STRIDE_Y, CONV1_STRIDE_X, CONV1_KERNEL_HEIGHT, 
     CONV1_KERNEL_WIDTH, CONV1_ACTIVATION, ENV_MEM_CONT_OFFSET, ENV_MEM_CONT_SIZE, ENV_MEM_WRAP_OFFSET, 
     ENV_MEM_WRAP_SIZE, ENV_MEM_STRIDE, CONV1_MEM_CONT_OFFSET, CONV1_MEM_CONT_SIZE, CONV1_MEM_WRAP_OFFSET, CONV1_MEM_WRAP_SIZE, CONV1_MEM_STRIDE);
-
-#ifdef PROFILE_NON_MAC
-    profile_stop(&prof_conv1_total, conv1_profile_start);
-#endif
 
     //convcellPropagate1(inputs , conv1_output, conv1_biases, conv1_weights, CONV1_SCALING);
 
@@ -862,11 +464,7 @@ void propagate(const UDATA_T* inputs, Target_T* outputs, UDATA_T* maxPropagate_v
     const Tick_T start_conv2 = tick();
 #endif
 
-#ifdef PROFILE_NON_MAC
-    const ProfileStart_T conv2_profile_start = profile_start();
-#endif
-
-    convcellPropagate2(conv1_output , conv2_output, conv2_biases, conv2_weights, 8,
+    convcellPropagate1(conv1_output , conv2_output, conv2_biases, conv2_weights, 8,
     CONV2_NB_CHANNELS, CONV2_CHANNELS_HEIGHT, CONV2_CHANNELS_WIDTH, 
     CONV2_NB_OUTPUTS, CONV2_OUTPUTS_HEIGHT, CONV2_OUTPUTS_WIDTH, 
     CONV2_PADDING_Y, CONV2_PADDING_X, CONV2_STRIDE_Y, CONV2_STRIDE_X, 
@@ -874,10 +472,6 @@ void propagate(const UDATA_T* inputs, Target_T* outputs, UDATA_T* maxPropagate_v
     CONV1_MEM_CONT_SIZE, CONV1_MEM_WRAP_OFFSET, CONV1_MEM_WRAP_SIZE, 
     CONV1_MEM_STRIDE, CONV2_MEM_CONT_OFFSET, CONV2_MEM_CONT_SIZE, CONV2_MEM_WRAP_OFFSET, 
     CONV2_MEM_WRAP_SIZE, CONV2_MEM_STRIDE);
-
-#ifdef PROFILE_NON_MAC
-    profile_stop(&prof_conv2_total, conv2_profile_start);
-#endif
 
     //convcellPropagate2(conv1_output , conv2_output, conv2_biases, conv2_weights, CONV2_SCALING);
 
@@ -903,10 +497,6 @@ void propagate(const UDATA_T* inputs, Target_T* outputs, UDATA_T* maxPropagate_v
     const Tick_T start_fc1 = tick();
 #endif
 
-#ifdef PROFILE_NON_MAC
-    const ProfileStart_T fc1_profile_start = profile_start();
-#endif
-
     fccellPropagateUDATA_T(conv2_output , fc1_output, fc1_biases, fc1_weights, 8,
     FC1_NB_CHANNELS, FC1_CHANNELS_HEIGHT, 
     FC1_CHANNELS_WIDTH, FC1_NB_OUTPUTS, 
@@ -915,10 +505,6 @@ void propagate(const UDATA_T* inputs, Target_T* outputs, UDATA_T* maxPropagate_v
     CONV2_MEM_WRAP_OFFSET, CONV2_MEM_WRAP_SIZE, 
     CONV2_MEM_STRIDE, FC1_MEM_CONT_OFFSET, 
     FC1_MEM_CONT_SIZE, FC1_MEM_WRAP_OFFSET, FC1_MEM_WRAP_SIZE, FC1_MEM_STRIDE);
-
-#ifdef PROFILE_NON_MAC
-    profile_stop(&prof_fc1_total, fc1_profile_start);
-#endif
 
 #ifdef BENCHMARK
     const Tick_T end_fc1 = tick();
@@ -942,10 +528,6 @@ void propagate(const UDATA_T* inputs, Target_T* outputs, UDATA_T* maxPropagate_v
     const Tick_T start_fc2 = tick();
 #endif
 
-#ifdef PROFILE_NON_MAC
-    const ProfileStart_T fc2_profile_start = profile_start();
-#endif
-
     fccellPropagateDATA_T(fc1_output , fc2_output, fc2_biases, fc2_weights, 11,
     FC2_NB_CHANNELS, FC2_CHANNELS_HEIGHT, 
     FC2_CHANNELS_WIDTH, FC2_NB_OUTPUTS, 
@@ -955,10 +537,6 @@ void propagate(const UDATA_T* inputs, Target_T* outputs, UDATA_T* maxPropagate_v
     FC1_MEM_WRAP_SIZE, FC1_MEM_STRIDE, 
     FC2_MEM_CONT_OFFSET, FC2_MEM_CONT_SIZE, 
     FC2_MEM_WRAP_OFFSET, FC2_MEM_WRAP_SIZE, FC2_MEM_STRIDE);
-
-#ifdef PROFILE_NON_MAC
-    profile_stop(&prof_fc2_total, fc2_profile_start);
-#endif
 
 #ifdef BENCHMARK
     const Tick_T end_fc2 = tick();
