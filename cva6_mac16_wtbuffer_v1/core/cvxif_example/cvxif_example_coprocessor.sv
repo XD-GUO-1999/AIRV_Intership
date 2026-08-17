@@ -217,22 +217,54 @@ module cvxif_example_coprocessor
 
   localparam logic [4:0] CONV2_ACTIVE_BLOCKS = 5'd25;  
   localparam logic [9:0] CONV2_WEIGHT_LAST = 10'd599;
-  //4 weight buffers bank
 
-  logic [31:0] weight_buffer0 [0:599];
-  logic [31:0] weight_buffer1 [0:599];
-  logic [31:0] weight_buffer2 [0:599];
-  logic [31:0] weight_buffer3 [0:599];
+  /*
+   * ============================================================
+   * Weight buffer
+   * ============================================================
+   *
+   * Conv1 uses entries 0..15.
+   * Conv2 uses entries 0..599.
+   *
+   * Four independent 32-bit banks provide the 128-bit weight
+   * block required by one MAC16 operation.
+   *
+   * IMPORTANT: reads are synchronous so Vivado can infer BRAM.
+   */
+  localparam int unsigned WEIGHT_BUF_DEPTH = 600;
+
+  (* ram_style = "block" *)
+  logic [31:0] weight_buffer0 [0:WEIGHT_BUF_DEPTH-1];
+
+  (* ram_style = "block" *)
+  logic [31:0] weight_buffer1 [0:WEIGHT_BUF_DEPTH-1];
+
+  (* ram_style = "block" *)
+  logic [31:0] weight_buffer2 [0:WEIGHT_BUF_DEPTH-1];
+
+  (* ram_style = "block" *)
+  logic [31:0] weight_buffer3 [0:WEIGHT_BUF_DEPTH-1];
+
+  /* Registered outputs from synchronous BRAM reads. */
+  logic [31:0] weight_rd0_q;
+  logic [31:0] weight_rd1_q;
+  logic [31:0] weight_rd2_q;
+  logic [31:0] weight_rd3_q;
 
   logic [9:0] weight_block_cnt_q;
-  
-  logic weight_buffer_valid_q;
+  logic       weight_buffer_valid_q;
 
   logic conv2_weight_mode;
   logic conv1_weight_mode;
   logic weight_buffer_mode;
   logic use_weight_buffer;
   logic [9:0] weight_last_block;
+
+  /* BRAM capture/prefetch control. */
+  logic       mac_done;
+  logic       weight_capture_en;
+  logic       weight_prefetch_en;
+  logic [9:0] weight_prefetch_addr;
  /////
 
   logic signed [31:0] acc_q;
@@ -273,11 +305,85 @@ module cvxif_example_coprocessor
   assign is_mac16buf_ex = req_o.is_mac16buf;
   assign is_mac16buf_para_ex = req_o.is_mac16buf_para;
 
-  // Result is valid when the FIFO is not empty and the current instruction is not killed
+  /*
+   * Keep the original CV-X-IF result timing.
+   *
+   * The one-cycle synchronous BRAM latency is hidden by prefetching
+   * the NEXT weight block, so no extra x_result_valid wait state is
+   * introduced.
+   */
   assign x_result_valid_o = ~fifo_empty && ~x_commit_i.x_commit_kill;
+
+  /* A MAC really completes only when the result handshake occurs. */
+  assign mac_done =
+      x_result_valid_o
+      && x_result_ready_i
+      && (is_mac16buf_ex || is_mac16buf_para_ex);
+
+  /*
+   * Capture phase: use CPU weight operands directly for the MAC and
+   * simultaneously write them into the local weight BRAM.
+   */
+  assign weight_capture_en =
+      mac_done
+      && weight_buffer_mode
+      && !weight_buffer_valid_q;
+
+  /*
+   * Prefetch phase:
+   *   - normal reuse: completed block n prefetches block n+1;
+   *   - final capture block: prefetch block 0 so the first reuse MAC
+   *     can execute immediately on the next cycle.
+   */
+  assign weight_prefetch_en =
+      mac_done
+      && weight_buffer_mode
+      && (
+           weight_buffer_valid_q
+           ||
+           (!weight_buffer_valid_q
+            && (weight_block_cnt_q == weight_last_block))
+         );
+
+  /* Circular address sequence for Conv1 (0..15) or Conv2 (0..599). */
+  always_comb begin
+    if (weight_block_cnt_q == weight_last_block) begin
+      weight_prefetch_addr = 10'd0;
+    end else begin
+      weight_prefetch_addr = weight_block_cnt_q + 10'd1;
+    end
+  end
 
   assign wr_block_sel = (is_buf4_ex && (buf_active_blocks != active_blocks_q)) ||
                         (is_mac16buf_para_ex && req_o.is_first_block) ? 5'd0 : wr_block_cnt_q;
+
+  /*
+   * ============================================================
+   * Synchronous weight BRAM
+   * ============================================================
+   *
+   * Do NOT reset the RAM arrays. weight_buffer_valid_q guarantees
+   * that uninitialized contents are never consumed.
+   *
+   * Write and read are independent on purpose. On the final capture
+   * MAC, the last block is written while block 0 is prefetched.
+   */
+  always_ff @(posedge clk_i) begin : weight_bram
+    if (weight_capture_en) begin
+      weight_buffer0[weight_block_cnt_q] <= req_o.req.rs[0];
+      weight_buffer1[weight_block_cnt_q] <= req_o.req.rs[1];
+      weight_buffer2[weight_block_cnt_q] <= req_o.req.rs[3];
+      weight_buffer3[weight_block_cnt_q] <= req_o.req.rs[4];
+    end
+
+    if (weight_prefetch_en) begin
+      weight_rd0_q <= weight_buffer0[weight_prefetch_addr];
+      weight_rd1_q <= weight_buffer1[weight_prefetch_addr];
+      weight_rd2_q <= weight_buffer2[weight_prefetch_addr];
+      weight_rd3_q <= weight_buffer3[weight_prefetch_addr];
+    end
+  end
+
   // modification: buffer write state machine for BUF4 instructions
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -330,15 +436,11 @@ module cvxif_example_coprocessor
             wr_block_cnt_q <= wr_block_sel + 5'd1;
           end
         end
-        // if we are in mac16buf or mac16buf_para, we load weight buffer
+        /*
+         * Weight-buffer address/state tracking.
+         * Actual RAM accesses are handled only by weight_bram above.
+         */
         if (weight_buffer_mode) begin
-          if (!weight_buffer_valid_q) begin
-            weight_buffer0[weight_block_cnt_q] <= req_o.req.rs[0];
-            weight_buffer1[weight_block_cnt_q] <= req_o.req.rs[1];
-            weight_buffer2[weight_block_cnt_q] <= req_o.req.rs[3];
-            weight_buffer3[weight_block_cnt_q] <= req_o.req.rs[4];
-          end
-
           if (weight_block_cnt_q == weight_last_block) begin
             weight_block_cnt_q <= 10'd0;
 
@@ -403,10 +505,15 @@ module cvxif_example_coprocessor
 
     if (is_mac16buf_ex || is_mac16buf_para_ex) begin
       if (use_weight_buffer) begin
-        weight1 = $signed(weight_buffer0[weight_block_cnt_q]);
-        weight2 = $signed(weight_buffer1[weight_block_cnt_q]);
-        weight3 = $signed(weight_buffer2[weight_block_cnt_q]);
-        weight4 = $signed(weight_buffer3[weight_block_cnt_q]);
+        /*
+         * Reuse phase: consume the weight block prefetched by the
+         * previous completed MAC. No combinational RAM read remains
+         * on the MAC critical path.
+         */
+        weight1 = $signed(weight_rd0_q);
+        weight2 = $signed(weight_rd1_q);
+        weight3 = $signed(weight_rd2_q);
+        weight4 = $signed(weight_rd3_q);
       end else begin
         weight1 = $signed(req_o.req.rs[0]);
         weight2 = $signed(req_o.req.rs[1]);
