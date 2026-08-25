@@ -409,11 +409,6 @@ module cvxif_example_coprocessor
           weight_buffer_valid_q <= 1'b0;
         end
 
-        // input_buffer[wr_base + 0] <= req_o.req.rs[0]; 
-        // input_buffer[wr_base + 1] <= req_o.req.rs[1]; 
-        // input_buffer[wr_base + 2] <= req_o.req.rs[3]; 
-        // input_buffer[wr_base + 3] <= req_o.req.rs[4]; 
-
         if (wr_block_sel == (buf_active_blocks - 5'd1)) begin
           wr_block_cnt_q <= 5'd0;
         end else begin
