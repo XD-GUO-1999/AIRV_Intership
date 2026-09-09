@@ -210,7 +210,7 @@ module cvxif_example_coprocessor
       .overflow_o()
   );
 
-  localparam int unsigned  INPUT_BUF_WORDS = 100; 
+  localparam int unsigned  INPUT_BUF_WORDS = 25; 
   // Add weight buffer for Conv2/Conv1
   localparam logic [4:0] CONV1_ACTIVE_BLOCKS = 5'd1;
   localparam logic [9:0] CONV1_WEIGHT_LAST = 10'd15;
@@ -272,7 +272,10 @@ module cvxif_example_coprocessor
   logic signed [31:0] mac_base_acc;
   logic signed [31:0] mac_next_acc;
 
-  logic [31:0] input_buffer [0:INPUT_BUF_WORDS-1];
+  logic [31:0] input_buffer0 [0:INPUT_BUF_WORDS-1];
+  logic [31:0] input_buffer1 [0:INPUT_BUF_WORDS-1];
+  logic [31:0] input_buffer2 [0:INPUT_BUF_WORDS-1];
+  logic [31:0] input_buffer3 [0:INPUT_BUF_WORDS-1];
 
   logic [4:0] wr_block_cnt_q;
   logic [4:0] rd_block_cnt_q;
@@ -288,13 +291,13 @@ module cvxif_example_coprocessor
 
   logic [4:0] buf_active_blocks;
   logic [4:0] wr_block_sel;
-  logic [6:0] wr_base;
-  logic [6:0] rd_base;
+  // logic [6:0] wr_base;
+  // logic [6:0] rd_base;
 
   assign buf_active_blocks = req_o.req.instr[11:7] + 5'd1;
   
-  assign wr_base = {wr_block_sel, 2'b00};
-  assign rd_base = {rd_block_cnt_q, 2'b00};
+  // assign wr_base = {wr_block_sel, 2'b00};
+  // assign rd_base = {rd_block_cnt_q, 2'b00};
 
 
   logic is_buf4_ex;
@@ -397,7 +400,10 @@ module cvxif_example_coprocessor
       weight_block_cnt_q <= 10'd0;
 
       for (int i = 0; i < INPUT_BUF_WORDS; i++) begin
-        input_buffer[i] <= '0;
+        input_buffer0[i] <= '0;
+        input_buffer1[i] <= '0;
+        input_buffer2[i] <= '0;
+        input_buffer3[i] <= '0;
       end
     end else if (x_result_valid_o && x_result_ready_i) begin
       if(is_buf4_ex) begin
@@ -420,10 +426,10 @@ module cvxif_example_coprocessor
         end
       end else if (is_mac16buf_ex || is_mac16buf_para_ex) begin
         if (is_mac16buf_para_ex) begin
-          input_buffer[wr_base + 0] <= req_o.req.rs[5];
-          input_buffer[wr_base + 1] <= req_o.req.rs[6];
-          input_buffer[wr_base + 2] <= req_o.req.rs[7];
-          input_buffer[wr_base + 3] <= req_o.req.rs[8];
+          input_buffer0[wr_block_sel] <= req_o.req.rs[5];
+          input_buffer1[wr_block_sel] <= req_o.req.rs[6];
+          input_buffer2[wr_block_sel] <= req_o.req.rs[7];
+          input_buffer3[wr_block_sel] <= req_o.req.rs[8];
 
           if(req_o.is_final_block) begin
             wr_block_cnt_q <= 5'd0;
@@ -522,10 +528,10 @@ module cvxif_example_coprocessor
         input3 = $signed(req_o.req.rs[7]);
         input4 = $signed(req_o.req.rs[8]);
       end else begin
-        input1 = $signed(input_buffer[rd_base + 0]);
-        input2 = $signed(input_buffer[rd_base + 1]);
-        input3 = $signed(input_buffer[rd_base + 2]);
-        input4 = $signed(input_buffer[rd_base + 3]);
+        input1 = $signed(input_buffer0[rd_block_cnt_q]);
+        input2 = $signed(input_buffer1[rd_block_cnt_q]);
+        input3 = $signed(input_buffer2[rd_block_cnt_q]);
+        input4 = $signed(input_buffer3[rd_block_cnt_q]);
       end
 
       p0 = $signed({1'b0, input1[7:0]}) * $signed(weight1[7:0]);
