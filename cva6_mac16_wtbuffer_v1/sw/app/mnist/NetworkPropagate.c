@@ -1306,28 +1306,30 @@ static void convcellPropagate1(
                         * 4-byte aligned：
                         * 每行直接使用一个lw。
                         */
-                        mac16buf_para_conv1_aligned(
-                            row0,
-                            row1,
-                            row2,
-                            row3,
-                            filter_weights,
-                            weightedSum
-                        );
+                        weightedSum =
+                            mac16buf_para_conv1_aligned(
+                                row0,
+                                row1,
+                                row2,
+                                row3,
+                                filter_weights,
+                                weightedSum
+                            );
                     }
                     else if (input_alignment == 2u) {
                         /*
                         * 地址为2 mod 4：
                         * 每行使用两个lhu拼接。
                         */
-                        mac16buf_para_conv1_unaligned2(
-                            row0,
-                            row1,
-                            row2,
-                            row3,
-                            filter_weights,
-                            weightedSum
-                        );
+                        weightedSum = 
+                            mac16buf_para_conv1_unaligned2(
+                                row0,
+                                row1,
+                                row2,
+                                row3,
+                                filter_weights,
+                                weightedSum
+                            );
                     }
                 } else {
                     if (input_alignment == 0u) {
@@ -1335,36 +1337,39 @@ static void convcellPropagate1(
                         * 4-byte aligned：
                         * 每行直接使用一个lw。
                         */
-                        mac16buf_para_conv1_aligned_wbuf(
-                            row0,
-                            row1,
-                            row2,
-                            row3,
-                            weightedSum
-                        );
+                        weightedSum = 
+                            mac16buf_para_conv1_aligned_wbuf(
+                                row0,
+                                row1,
+                                row2,
+                                row3,
+                                weightedSum
+                            );
                     }
                     else if (input_alignment == 2u) {
                         /*
                         * 地址为2 mod 4：
                         * 每行使用两个lhu拼接。
                         */
-                        mac16buf_para_conv1_unaligned2_wbuf(
-                            row0,
-                            row1,
-                            row2,
-                            row3,
-                            weightedSum
-                        );
+                       weightedSum = 
+                            mac16buf_para_conv1_unaligned2_wbuf(
+                                row0,
+                                row1,
+                                row2,
+                                row3,
+                                weightedSum
+                            );
                     }
                 }
                 
-                outputs[output_offset + output]
-                    = sat(
-                        weightedSum,
-                        output,
-                        ACTIVATION,
-                        rescaling
-                    );
+                // outputs[output_offset + output]
+                //     = sat(
+                //         weightedSum,
+                //         output,
+                //         ACTIVATION,
+                //         rescaling
+                //     );
+                outputs[output_offset + output] = (UDATA_T)weightedSum;
             }
 
             /*
@@ -1402,13 +1407,14 @@ static void convcellPropagate1(
                     );
                 }
 
-                outputs[output_offset + output]
-                    = sat(
-                        weightedSum,
-                        output,
-                        ACTIVATION,
-                        rescaling
-                    );
+                // outputs[output_offset + output]
+                //     = sat(
+                //         weightedSum,
+                //         output,
+                //         ACTIVATION,
+                //         rescaling
+                //     );
+                outputs[output_offset + output] = (UDATA_T)weightedSum;
             }
         }
     }
@@ -1566,8 +1572,9 @@ static void convcellPropagate2(
                     }
                 }
 
-                outputs[oOffset + output]
-                    = sat(weightedSum, output, ACTIVATION, rescaling);
+                // outputs[oOffset + output]
+                //     = sat(weightedSum, output, ACTIVATION, rescaling);
+                outputs[oOffset + output] = (UDATA_T)weightedSum;
             }
 
 
@@ -1597,13 +1604,14 @@ static void convcellPropagate2(
                     );
                 }
 
-                outputs[oOffset + output]
-                    = sat(
-                        weightedSum,
-                        output,
-                        ACTIVATION,
-                        rescaling
-                    );
+                // outputs[oOffset + output]
+                //     = sat(
+                //         weightedSum,
+                //         output,
+                //         ACTIVATION,
+                //         rescaling
+                //     );
+                outputs[oOffset + output] = (UDATA_T)weightedSum;                
             }
         }
     }
@@ -1730,7 +1738,8 @@ static void fccellPropagateUDATA_T(
             );
         }
 
-        outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
+        // outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
+        outputs[och] = (UDATA_T)weightedSum;
         neuron_weights += 384;
     }
 
@@ -1895,6 +1904,7 @@ static void fccellPropagateDATA_T(
 
         outputs[och]
             = sat(weightedSum, och, ACTIVATION, rescaling);
+        
     }
 
 
