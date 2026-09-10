@@ -90,6 +90,9 @@ module cvxif_example_coprocessor
     logic          is_mac16buf_para;
     logic          is_first_block;
     logic          is_final_block;
+
+    //modification: post processed before write back to the CPU
+    logic postprocessed_en;
   } x_issue_t;
 
 
@@ -112,6 +115,10 @@ module cvxif_example_coprocessor
   logic       issue_mac_op; //mac16buf and mac16buf_para
   logic       issue_is_first_block;
   logic       issue_is_final_block;
+
+  //modification: post processed before write back to the CPU
+  logic       issue_postprocessed_en;
+  assign issue_postprocessed_en = issue_mac_op && ((issue_active_blocks_q == 5'd1) || (issue_active_blocks_q == 5'd25) || (issue_active_blocks_q == 5'd24));
 
   // modification: detect whether the incoming issue request is BUF4 or MAC16BUF or MAC16BUF_PARA
   assign issue_is_buf4          = (x_issue_req_i.instr[6:0] == 7'b0101011);
@@ -148,6 +155,7 @@ module cvxif_example_coprocessor
   assign req_i.is_mac16buf_para = issue_is_mac16buf_para;
   assign req_i.is_first_block = issue_is_first_block;
   assign req_i.is_final_block = issue_is_final_block;
+  assign req_i.postprocessed_en  = issue_postprocessed_en;
 
   // modification: track issue-side buffer block counters for MAC16BUF/BUF4 execution
   always_ff @(posedge clk_i or negedge rst_ni) begin : issue_block_counter
@@ -271,6 +279,59 @@ module cvxif_example_coprocessor
   logic signed [31:0] partial_sum;
   logic signed [31:0] mac_base_acc;
   logic signed [31:0] mac_next_acc;
+  logic        [7:0] sat_result_u8;
+  logic signed [31:0] mac_writeback_data;
+
+  function automatic logic [7:0] sat_shift8_u8(
+      input logic signed [31:0] value
+  );
+  begin
+      /*
+      * Equivalent to:
+      *
+      *   ReLU(value)
+      *   value >> 8
+      *   clamp(value, 0, 255)
+      *
+      * Conv1 / Conv2 / FC1 all use shift = 8
+      * and unsigned 8-bit outputs.
+      */
+
+      if (value[31]) begin
+          // Negative -> ReLU / lower saturation
+          sat_shift8_u8 = 8'd0;
+      end
+      else if (|value[30:16]) begin
+          // (value >> 8) > 255
+          sat_shift8_u8 = 8'd255;
+      end
+      else begin
+          // Equivalent to value >> 8
+          sat_shift8_u8 = value[15:8];
+      end
+  end
+  endfunction
+
+  always_comb begin
+      sat_result_u8 = sat_shift8_u8(mac_next_acc);
+
+      /*
+      * Default:
+      * return full 32-bit accumulator.
+      *
+      * This is important for FC2 because its final MAC16BUF
+      * is followed by 6 scalar MAC operations in software.
+      */
+      mac_writeback_data = mac_next_acc;
+
+      /*
+      * Conv1 / Conv2 / FC1:
+      * only the final block returns the post-processed 8-bit result.
+      */
+      if (req_o.is_final_block && req_o.postprocessed_en) begin
+          mac_writeback_data = {24'd0, sat_result_u8};
+      end
+  end
 
   logic [31:0] input_buffer0 [0:INPUT_BUF_WORDS-1];
   logic [31:0] input_buffer1 [0:INPUT_BUF_WORDS-1];
@@ -561,7 +622,7 @@ module cvxif_example_coprocessor
 
 
   always_comb begin
-    x_result_o.data    = (is_mac16buf_ex || is_mac16buf_para_ex) ? mac_next_acc : '0;
+    x_result_o.data    = (is_mac16buf_ex || is_mac16buf_para_ex) ? mac_writeback_data : '0;
     x_result_o.id      = req_o.req.id;
     x_result_o.rd      = req_o.req.instr[11:7];
 
