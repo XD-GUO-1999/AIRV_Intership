@@ -91,8 +91,14 @@ module cvxif_example_coprocessor
     logic          is_first_block;
     logic          is_final_block;
 
-    //modification: post processed before write back to the CPU
-    logic postprocessed_en;
+    // modification: post processed before write back to the CPU
+    logic          postprocessed_en;
+
+    // modification: pack four 8-bit outputs into one 32-bit writeback
+    // Conv1/Conv2 use complete groups of four. FC1 also uses pack4,
+    // with a final 2-output tail flushed after output 149.
+    logic          pack4_en;
+    logic [1:0]    pack_idx;
   } x_issue_t;
 
 
@@ -116,9 +122,32 @@ module cvxif_example_coprocessor
   logic       issue_is_first_block;
   logic       issue_is_final_block;
 
-  //modification: post processed before write back to the CPU
+  // modification: post processed before write back to the CPU
   logic       issue_postprocessed_en;
-  assign issue_postprocessed_en = issue_mac_op && ((issue_active_blocks_q == 5'd1) || (issue_active_blocks_q == 5'd25) || (issue_active_blocks_q == 5'd24));
+
+  // modification: pack post-processed outputs before architectural writeback.
+  // Conv1: 16 outputs/channel group  -> exact groups of four.
+  // Conv2: 24 outputs/channel group  -> exact groups of four.
+  // FC1  : 150 output neurons        -> 37 groups of four + 2-output tail.
+  logic       issue_pack4_en;
+  logic [1:0] issue_pack_cnt_q;
+  logic       issue_is_fc1;
+  logic [7:0] issue_fc1_output_cnt_q;
+  logic       issue_pack_writeback;
+
+  assign issue_postprocessed_en = issue_mac_op &&
+      ((issue_active_blocks_q == 5'd1) ||
+       (issue_active_blocks_q == 5'd25) ||
+       (issue_active_blocks_q == 5'd24));
+
+  assign issue_pack4_en = issue_mac_op &&
+      ((issue_active_blocks_q == 5'd1) ||
+       (issue_active_blocks_q == 5'd25) ||
+       (issue_active_blocks_q == 5'd24));
+
+  // FC1 is identified by its 24 MAC16 blocks per output neuron.
+  assign issue_is_fc1 = issue_mac_op &&
+      (issue_active_blocks_q == 5'd24);
 
   // modification: detect whether the incoming issue request is BUF4 or MAC16BUF or MAC16BUF_PARA
   assign issue_is_buf4          = (x_issue_req_i.instr[6:0] == 7'b0101011);
@@ -130,15 +159,31 @@ module cvxif_example_coprocessor
   assign issue_is_first_block   = issue_mac_op && (issue_block_cnt_q == 5'd0);
   assign issue_is_final_block   = issue_mac_op && (issue_block_cnt_q == (issue_active_blocks_q - 5'd1));
 
-  // Start from the table decoder response, then override only MAC16BUF.writeback.
-  // A MAC16BUF is CPU-visible only for the final block of one output element.
-  // Non-final MAC16BUF instructions still complete through x_result_valid, but
-  // they do not write the register file.
-  // modification: override the decoded issue response for MAC16BUF writeback semantics
+
+  // A packed group normally writes back on byte 3 (four outputs collected).
+  // FC1 has 150 outputs, so output 149 must also force a writeback even though
+  // it is only byte 1 of the final partial group (outputs 148 and 149).
+  assign issue_pack_writeback =
+      issue_is_final_block &&
+      issue_pack4_en &&
+      ((issue_pack_cnt_q == 2'd3) ||
+       (issue_is_fc1 && (issue_fc1_output_cnt_q == 8'd149)));
+
+  // Start from the table decoder response, then override MAC16BUF writeback.
+  // Normal mode: only the final block of each output writes back.
+  // Pack4 mode: normally every fourth final output writes back.
+  // FC1 additionally flushes its final two outputs (148/149) on output 149.
+  // Outputs that do not write back are kept locally in output_pack_q.
   always_comb begin
     x_issue_resp_o = x_issue_resp_dec;
     if (issue_mac_op && x_issue_resp_dec.accept) begin
-      x_issue_resp_o.writeback = issue_is_final_block;
+      if (!issue_is_final_block) begin
+        x_issue_resp_o.writeback = 1'b0;
+      end else if (issue_pack4_en) begin
+        x_issue_resp_o.writeback = issue_pack_writeback;
+      end else begin
+        x_issue_resp_o.writeback = 1'b1;
+      end
     end
   end
 
@@ -153,22 +198,49 @@ module cvxif_example_coprocessor
   assign req_i.is_buf4        = issue_is_buf4;
   assign req_i.is_mac16buf    = issue_is_mac16buf;
   assign req_i.is_mac16buf_para = issue_is_mac16buf_para;
-  assign req_i.is_first_block = issue_is_first_block;
-  assign req_i.is_final_block = issue_is_final_block;
-  assign req_i.postprocessed_en  = issue_postprocessed_en;
+  assign req_i.is_first_block   = issue_is_first_block;
+  assign req_i.is_final_block   = issue_is_final_block;
+  assign req_i.postprocessed_en = issue_postprocessed_en;
+  assign req_i.pack4_en         = issue_pack4_en;
+  assign req_i.pack_idx         = issue_pack_cnt_q;
 
   // modification: track issue-side buffer block counters for MAC16BUF/BUF4 execution
   always_ff @(posedge clk_i or negedge rst_ni) begin : issue_block_counter
     if (!rst_ni) begin
-      issue_active_blocks_q <= 5'd1;
-      issue_block_cnt_q     <= 5'd0;
+      issue_active_blocks_q     <= 5'd1;
+      issue_block_cnt_q         <= 5'd0;
+      issue_pack_cnt_q          <= 2'd0;
+      issue_fc1_output_cnt_q    <= 8'd0;
     end else if (instr_push) begin
       if (issue_is_buf4) begin
-        issue_active_blocks_q <= issue_buf_active_blocks;
-        issue_block_cnt_q     <= 5'd0;
+        issue_active_blocks_q  <= issue_buf_active_blocks;
+        issue_block_cnt_q      <= 5'd0;
+        issue_pack_cnt_q       <= 2'd0;
+        issue_fc1_output_cnt_q <= 8'd0;
       end else if (issue_is_mac16buf || issue_is_mac16buf_para) begin
         if (issue_is_final_block) begin
           issue_block_cnt_q <= 5'd0;
+
+          // Advance one packed-output position only after a complete output
+          // neuron/channel has finished. A normal full group or the FC1 tail
+          // writeback resets the byte index to zero for the next group.
+          if (issue_pack4_en) begin
+            if (issue_pack_writeback) begin
+              issue_pack_cnt_q <= 2'd0;
+            end else begin
+              issue_pack_cnt_q <= issue_pack_cnt_q + 2'd1;
+            end
+          end
+
+          // FC1 has exactly 150 output neurons (0..149). This counter is used
+          // only to detect the final 2-output tail and is reset after output149.
+          if (issue_is_fc1) begin
+            if (issue_fc1_output_cnt_q == 8'd149) begin
+              issue_fc1_output_cnt_q <= 8'd0;
+            end else begin
+              issue_fc1_output_cnt_q <= issue_fc1_output_cnt_q + 8'd1;
+            end
+          end
         end else begin
           issue_block_cnt_q <= issue_block_cnt_q + 5'd1;
         end
@@ -282,6 +354,10 @@ module cvxif_example_coprocessor
   logic        [7:0] sat_result_u8;
   logic signed [31:0] mac_writeback_data;
 
+  // Packed-output state. Each completed output contributes one byte.
+  logic [31:0] output_pack_q;
+  logic [31:0] output_pack_next;
+
   function automatic logic [7:0] sat_shift8_u8(
       input logic signed [31:0] value
   );
@@ -315,21 +391,34 @@ module cvxif_example_coprocessor
   always_comb begin
       sat_result_u8 = sat_shift8_u8(mac_next_acc);
 
-      /*
-      * Default:
-      * return full 32-bit accumulator.
-      *
-      * This is important for FC2 because its final MAC16BUF
-      * is followed by 6 scalar MAC operations in software.
-      */
-      mac_writeback_data = mac_next_acc;
+      // Build the packed word including the CURRENT output byte.
+      // This avoids the nonblocking-assignment issue on the fourth byte:
+      // x_result_o.data can immediately return {out3,out2,out1,out0}.
+      output_pack_next = output_pack_q;
+      case (req_o.pack_idx)
+        2'd0: output_pack_next[7:0]   = sat_result_u8;
+        2'd1: output_pack_next[15:8]  = sat_result_u8;
+        2'd2: output_pack_next[23:16] = sat_result_u8;
+        2'd3: output_pack_next[31:24] = sat_result_u8;
+        default: ;
+      endcase
 
       /*
-      * Conv1 / Conv2 / FC1:
-      * only the final block returns the post-processed 8-bit result.
-      */
+       * Default: return the full 32-bit accumulator.
+       * FC2 still needs this because six scalar MACs follow MAC16.
+       */
+      mac_writeback_data = mac_next_acc;
+
       if (req_o.is_final_block && req_o.postprocessed_en) begin
+        if (req_o.pack4_en) begin
+          // Conv1 / Conv2 / FC1: return the packed word when writeback is enabled.
+          // Normally this is pack_idx==3. FC1 output149 also writes back at
+          // pack_idx==1, producing a valid 16-bit tail in data[15:0].
+          mac_writeback_data = output_pack_next;
+        end else begin
+          // Non-packed post-processing path (currently unused by Conv1/2/FC1).
           mac_writeback_data = {24'd0, sat_result_u8};
+        end
       end
   end
 
@@ -455,6 +544,7 @@ module cvxif_example_coprocessor
       wr_block_cnt_q <= 5'd0;
       rd_block_cnt_q <= 5'd0;
       acc_q <= '0;
+      output_pack_q <= '0;
 
       //keep the weight buffer at the moment
       weight_buffer_valid_q <= 1'b0;
@@ -469,6 +559,7 @@ module cvxif_example_coprocessor
     end else if (x_result_valid_o && x_result_ready_i) begin
       if(is_buf4_ex) begin
         active_blocks_q <= buf_active_blocks;
+        output_pack_q <= '0;
         //enter the weight buffer
         if ((buf_active_blocks == CONV2_ACTIVE_BLOCKS) || (buf_active_blocks == CONV1_ACTIVE_BLOCKS))
         begin
@@ -521,6 +612,19 @@ module cvxif_example_coprocessor
         //   middle      : acc = acc_q + partial_sum
         //   final       : acc = acc_q + partial_sum, then write back
         acc_q <= mac_next_acc;
+
+        // Pack post-processed Conv1/Conv2/FC1 outputs locally.
+        // If this instruction performs an architectural packed writeback,
+        // clear the pack register for the next group. This covers both:
+        //   - a normal full 4-output group (pack_idx == 3), and
+        //   - the FC1 final 2-output tail (output149, pack_idx == 1).
+        if (req_o.is_final_block && req_o.postprocessed_en && req_o.pack4_en) begin
+          if (req_o.resp.writeback) begin
+            output_pack_q <= '0;
+          end else begin
+            output_pack_q <= output_pack_next;
+          end
+        end
 
         if (req_o.is_final_block) begin
           rd_block_cnt_q <= 5'd0;

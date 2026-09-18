@@ -53,6 +53,35 @@ static int clamp(int v, int lo, int hi) {
  * 这里四个指针分别指向 patch 的四行，每行连续 4 个 uint8。
  * buf4 x0 表示 active_blocks = 1，所以后续每个 mac16buf 都会读 block0。
  */
+
+
+static inline void store_packed4(
+    UDATA_T* addr,
+    uint32_t packed)
+{
+    asm volatile(
+
+        "sw %1, 0(%0)"
+        : 
+        : "r"(addr), "r"(packed)
+        : "memory"
+    );
+}
+
+static inline void store_packed2(
+    UDATA_T* addr,
+    uint32_t packed)
+{
+    asm volatile(
+
+        "sh %1, 0(%0)"
+        : 
+        : "r"(addr), "r"(packed)
+        : "memory"
+    );
+}
+
+
 static inline void buffer4_setmode_conv1(void)
 {
     asm volatile(
@@ -1369,7 +1398,7 @@ static void convcellPropagate1(
                 //         ACTIVATION,
                 //         rescaling
                 //     );
-                outputs[output_offset + output] = (UDATA_T)weightedSum;
+                //outputs[output_offset + output] = (UDATA_T)weightedSum;
             }
 
             /*
@@ -1414,7 +1443,11 @@ static void convcellPropagate1(
                 //         ACTIVATION,
                 //         rescaling
                 //     );
-                outputs[output_offset + output] = (UDATA_T)weightedSum;
+                if ((output & 3) == 3){
+                    store_packed4(
+                        outputs + output_offset + output - 3, (uint32_t)weightedSum
+                    );
+                } 
             }
         }
     }
@@ -1574,7 +1607,7 @@ static void convcellPropagate2(
 
                 // outputs[oOffset + output]
                 //     = sat(weightedSum, output, ACTIVATION, rescaling);
-                outputs[oOffset + output] = (UDATA_T)weightedSum;
+               // outputs[oOffset + output] = (UDATA_T)weightedSum;
             }
 
 
@@ -1611,7 +1644,13 @@ static void convcellPropagate2(
                 //         ACTIVATION,
                 //         rescaling
                 //     );
-                outputs[oOffset + output] = (UDATA_T)weightedSum;                
+                //outputs[oOffset + output] = (UDATA_T)weightedSum;     
+                
+                if ((output & 3) == 3){
+                    store_packed4(
+                        outputs + oOffset + output - 3, (uint32_t)weightedSum
+                    );
+                } 
             }
         }
     }
@@ -1739,7 +1778,19 @@ static void fccellPropagateUDATA_T(
         }
 
         // outputs[och] = sat(weightedSum, och, ACTIVATION, rescaling);
-        outputs[och] = (UDATA_T)weightedSum;
+
+        if((och & 3) == 3){
+            store_packed4(
+                outputs + och -3,
+                (uint32_t)weightedSum
+            );
+        }
+        else if (och == NB_OUTPUTS - 1){
+            store_packed2(
+                outputs + och -1,
+                (uint32_t)weightedSum
+            );
+        }
         neuron_weights += 384;
     }
 
