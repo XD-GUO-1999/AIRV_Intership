@@ -108,6 +108,33 @@ module cvxif_example_coprocessor
   x_issue_t req_i;
   x_issue_t req_o;
 
+  /*
+   * ============================================================
+   * Two-stage MAC pipeline (cut after partial_sum)
+   * ============================================================
+   *
+   * Stage 1 performs input/weight selection, 16 multiplications and the
+   * reduction tree that produces partial_sum.  partial_sum plus the matching
+   * instruction metadata are captured in the pipeline register.
+   *
+   * Stage 2 performs the local accumulation (bias/acc_q + partial_sum), then
+   * post-processing / output packing and drives CV-X-IF x_result.  This is the
+   * intended timing cut:
+   *
+   *   multipliers + reduction -> [REGISTER] -> accumulator + sat + pack/result
+   *
+   * The register is elastic: when Stage 2 is accepted in the same cycle,
+   * Stage 1 may immediately load the next instruction.  Thus the intended
+   * initiation interval is one cycle (II=1).
+   */
+  logic       result_pipe_valid_q;
+  x_issue_t   result_pipe_req_q;
+  logic signed [31:0] partial_sum_pipe_q; // Stage-1 registered reduction result
+
+  logic result_pipe_ready;
+  logic stage1_fire;
+  logic stage2_fire;
+
   // modification: issue-side block counter and flags for MAC16BUF/BUF4 processing
   // It is used only to decide whether a MAC16BUF instruction should request
   // an architectural writeback. The actual accumulation is still performed
@@ -188,8 +215,23 @@ module cvxif_example_coprocessor
   end
 
   assign instr_push = x_issue_valid_i && x_issue_ready_o && x_issue_resp_o.accept;
+
+  // Stage 2 can be replaced in the same cycle in which its result is accepted.
+  assign result_pipe_ready = ~result_pipe_valid_q || x_result_ready_i;
+
+  // Accept the FIFO head into Stage 1 only when the result pipeline has room.
+  assign stage1_fire = ~fifo_empty
+                    && result_pipe_ready
+                    && ~(x_commit_i.x_commit_kill && x_commit_valid_i);
+
+  assign stage2_fire = result_pipe_valid_q
+                    && x_result_ready_i
+                    && ~(x_commit_i.x_commit_kill && x_commit_valid_i);
+
+  // IMPORTANT: the FIFO now pops when Stage 1 accepts the instruction, not
+  // when Stage 2 returns the result.  This is what allows one new MAC per cycle.
   assign instr_pop  = (x_commit_i.x_commit_kill && x_commit_valid_i) ||
-                      (x_result_valid_o && x_result_ready_i);
+                      stage1_fire;
   assign x_issue_ready_q = ~fifo_full;
 
   // modification: stash MAC16BUF/BUF4 metadata in the FIFO entry for later processing
@@ -388,14 +430,25 @@ module cvxif_example_coprocessor
   end
   endfunction
 
+  /*
+   * Stage 2: local accumulation + post-processing + packing.
+   *
+   * IMPORTANT: partial_sum_pipe_q and result_pipe_req_q belong to the SAME
+   * MAC instruction.  For a first block we use its saved architectural rd/bias;
+   * otherwise we use the local accumulator produced by the previous Stage-2 MAC.
+   */
   always_comb begin
+      mac_base_acc = result_pipe_req_q.is_first_block
+                   ? $signed(result_pipe_req_q.req.rs[2])
+                   : acc_q;
+
+      mac_next_acc = mac_base_acc + partial_sum_pipe_q;
+
       sat_result_u8 = sat_shift8_u8(mac_next_acc);
 
       // Build the packed word including the CURRENT output byte.
-      // This avoids the nonblocking-assignment issue on the fourth byte:
-      // x_result_o.data can immediately return {out3,out2,out1,out0}.
       output_pack_next = output_pack_q;
-      case (req_o.pack_idx)
+      case (result_pipe_req_q.pack_idx)
         2'd0: output_pack_next[7:0]   = sat_result_u8;
         2'd1: output_pack_next[15:8]  = sat_result_u8;
         2'd2: output_pack_next[23:16] = sat_result_u8;
@@ -404,19 +457,15 @@ module cvxif_example_coprocessor
       endcase
 
       /*
-       * Default: return the full 32-bit accumulator.
+       * Default: return the full 32-bit accumulated result.
        * FC2 still needs this because six scalar MACs follow MAC16.
        */
       mac_writeback_data = mac_next_acc;
 
-      if (req_o.is_final_block && req_o.postprocessed_en) begin
-        if (req_o.pack4_en) begin
-          // Conv1 / Conv2 / FC1: return the packed word when writeback is enabled.
-          // Normally this is pack_idx==3. FC1 output149 also writes back at
-          // pack_idx==1, producing a valid 16-bit tail in data[15:0].
+      if (result_pipe_req_q.is_final_block && result_pipe_req_q.postprocessed_en) begin
+        if (result_pipe_req_q.pack4_en) begin
           mac_writeback_data = output_pack_next;
         end else begin
-          // Non-packed post-processing path (currently unused by Conv1/2/FC1).
           mac_writeback_data = {24'd0, sat_result_u8};
         end
       end
@@ -459,23 +508,22 @@ module cvxif_example_coprocessor
   assign is_mac16buf_para_ex = req_o.is_mac16buf_para;
 
   /*
-   * Keep the original CV-X-IF result timing.
-   *
-   * The one-cycle synchronous BRAM latency is hidden by prefetching
-   * the NEXT weight block, so no extra x_result_valid wait state is
-   * introduced.
+   * Stage 2 is now driven from the result pipeline register.  The FIFO head
+   * has already been consumed by Stage 1 one cycle earlier.
    */
-  assign x_result_valid_o = ~fifo_empty && ~x_commit_i.x_commit_kill;
-
-  /* A MAC really completes only when the result handshake occurs. */
-  assign mac_done =
-      x_result_valid_o
-      && x_result_ready_i
-      && (is_mac16buf_ex || is_mac16buf_para_ex);
+  assign x_result_valid_o = result_pipe_valid_q
+                         && ~(x_commit_i.x_commit_kill && x_commit_valid_i);
 
   /*
-   * Capture phase: use CPU weight operands directly for the MAC and
-   * simultaneously write them into the local weight BRAM.
+   * Internal MAC-side state advances when Stage 1 accepts a MAC.  This keeps
+   * the input/weight-buffer address stream aligned with an II=1 pipeline.
+   */
+  assign mac_done = stage1_fire
+                 && (is_mac16buf_ex || is_mac16buf_para_ex);
+
+  /*
+   * Capture phase: when Stage 1 accepts a MAC, use CPU weight operands
+   * directly for the MAC and simultaneously write them into local weight BRAM.
    */
   assign weight_capture_en =
       mac_done
@@ -537,7 +585,7 @@ module cvxif_example_coprocessor
     end
   end
 
-  // modification: buffer write state machine for BUF4 instructions
+  // modification: execution-side state machine with one-stage result pipeline
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       active_blocks_q <= 5'd1;
@@ -546,7 +594,6 @@ module cvxif_example_coprocessor
       acc_q <= '0;
       output_pack_q <= '0;
 
-      //keep the weight buffer at the moment
       weight_buffer_valid_q <= 1'b0;
       weight_block_cnt_q <= 10'd0;
 
@@ -556,80 +603,89 @@ module cvxif_example_coprocessor
         input_buffer2[i] <= '0;
         input_buffer3[i] <= '0;
       end
-    end else if (x_result_valid_o && x_result_ready_i) begin
-      if(is_buf4_ex) begin
-        active_blocks_q <= buf_active_blocks;
-        output_pack_q <= '0;
-        //enter the weight buffer
-        if ((buf_active_blocks == CONV2_ACTIVE_BLOCKS) || (buf_active_blocks == CONV1_ACTIVE_BLOCKS))
-        begin
-          weight_block_cnt_q    <= 10'd0;
-          weight_buffer_valid_q <= 1'b0;
-        end
+    end else begin
+      /*
+       * Stage 1 input/buffer state updates.
+       *
+       * These input/buffer updates used to occur on x_result handshake. They must now
+       * occur when Stage 1 consumes req_o, otherwise the following MAC would
+       * see stale input/weight-buffer addresses and the pipeline could not
+       * accept one instruction per cycle.
+       */
+      if (stage1_fire) begin
+        if (is_buf4_ex) begin
+          active_blocks_q <= buf_active_blocks;
+          output_pack_q <= '0;
 
-        if (wr_block_sel == (buf_active_blocks - 5'd1)) begin
-          wr_block_cnt_q <= 5'd0;
-        end else begin
-          wr_block_cnt_q <= wr_block_sel + 5'd1;
-        end
+          if ((buf_active_blocks == CONV2_ACTIVE_BLOCKS) ||
+              (buf_active_blocks == CONV1_ACTIVE_BLOCKS)) begin
+            weight_block_cnt_q    <= 10'd0;
+            weight_buffer_valid_q <= 1'b0;
+          end
 
-        if (buf_active_blocks != active_blocks_q) begin
-          rd_block_cnt_q <= 5'd0; // Reset read block counter if active blocks change
-        end
-      end else if (is_mac16buf_ex || is_mac16buf_para_ex) begin
-        if (is_mac16buf_para_ex) begin
-          input_buffer0[wr_block_sel] <= req_o.req.rs[5];
-          input_buffer1[wr_block_sel] <= req_o.req.rs[6];
-          input_buffer2[wr_block_sel] <= req_o.req.rs[7];
-          input_buffer3[wr_block_sel] <= req_o.req.rs[8];
-
-          if(req_o.is_final_block) begin
+          if (wr_block_sel == (buf_active_blocks - 5'd1)) begin
             wr_block_cnt_q <= 5'd0;
           end else begin
             wr_block_cnt_q <= wr_block_sel + 5'd1;
           end
-        end
-        /*
-         * Weight-buffer address/state tracking.
-         * Actual RAM accesses are handled only by weight_bram above.
-         */
-        if (weight_buffer_mode) begin
-          if (weight_block_cnt_q == weight_last_block) begin
-            weight_block_cnt_q <= 10'd0;
 
-            if (!weight_buffer_valid_q) begin
-              weight_buffer_valid_q <= 1'b1;
+          if (buf_active_blocks != active_blocks_q) begin
+            rd_block_cnt_q <= 5'd0;
+          end
+        end else if (is_mac16buf_ex || is_mac16buf_para_ex) begin
+          if (is_mac16buf_para_ex) begin
+            input_buffer0[wr_block_sel] <= req_o.req.rs[5];
+            input_buffer1[wr_block_sel] <= req_o.req.rs[6];
+            input_buffer2[wr_block_sel] <= req_o.req.rs[7];
+            input_buffer3[wr_block_sel] <= req_o.req.rs[8];
+
+            if (req_o.is_final_block) begin
+              wr_block_cnt_q <= 5'd0;
+            end else begin
+              wr_block_cnt_q <= wr_block_sel + 5'd1;
             end
           end
-          else begin
-            weight_block_cnt_q <= weight_block_cnt_q + 10'd1;
+
+          // Weight-buffer address/state tracking follows Stage 1 acceptance.
+          if (weight_buffer_mode) begin
+            if (weight_block_cnt_q == weight_last_block) begin
+              weight_block_cnt_q <= 10'd0;
+              if (!weight_buffer_valid_q) begin
+                weight_buffer_valid_q <= 1'b1;
+              end
+            end else begin
+              weight_block_cnt_q <= weight_block_cnt_q + 10'd1;
+            end
+          end
+
+          if (req_o.is_final_block) begin
+            rd_block_cnt_q <= 5'd0;
+          end else begin
+            rd_block_cnt_q <= rd_block_cnt_q + 5'd1;
           end
         end
-        ////
+      end
 
-        // modification: auto local accumulator for MAC16BUF blocks
-        //   first block : acc = old rd + partial_sum
-        //   middle      : acc = acc_q + partial_sum
-        //   final       : acc = acc_q + partial_sum, then write back
+      /*
+       * Stage 2 state update.
+       *
+       * The accumulation recurrence lives here.  With one Stage-2 MAC accepted
+       * every cycle, acc_q is updated on the edge and is therefore available to
+       * the following middle/final MAC on the next cycle (II=1).
+       */
+      if (stage2_fire &&
+          (result_pipe_req_q.is_mac16buf || result_pipe_req_q.is_mac16buf_para)) begin
         acc_q <= mac_next_acc;
 
-        // Pack post-processed Conv1/Conv2/FC1 outputs locally.
-        // If this instruction performs an architectural packed writeback,
-        // clear the pack register for the next group. This covers both:
-        //   - a normal full 4-output group (pack_idx == 3), and
-        //   - the FC1 final 2-output tail (output149, pack_idx == 1).
-        if (req_o.is_final_block && req_o.postprocessed_en && req_o.pack4_en) begin
-          if (req_o.resp.writeback) begin
+        // Packed-output state belongs to the Stage-2 instruction.
+        if (result_pipe_req_q.is_final_block &&
+            result_pipe_req_q.postprocessed_en &&
+            result_pipe_req_q.pack4_en) begin
+          if (result_pipe_req_q.resp.writeback) begin
             output_pack_q <= '0;
           end else begin
             output_pack_q <= output_pack_next;
           end
-        end
-
-        if (req_o.is_final_block) begin
-          rd_block_cnt_q <= 5'd0;
-        end else begin
-          rd_block_cnt_q <= rd_block_cnt_q + 5'd1;
         end
       end
     end
@@ -666,8 +722,6 @@ module cvxif_example_coprocessor
     p14     = '0;
     p15     = '0;
     partial_sum  = '0;
-    mac_base_acc = '0;
-    mac_next_acc = '0;
 
     if (is_mac16buf_ex || is_mac16buf_para_ex) begin
       if (use_weight_buffer) begin
@@ -719,20 +773,48 @@ module cvxif_example_coprocessor
       partial_sum = 32'(p0)+ 32'(p1)+ 32'(p2)+ 32'(p3) + 32'(p4) + 32'(p5) + 32'(p6) + 32'(p7) + 32'(p8) 
                     + 32'(p9) + 32'(p10) + 32'(p11) + 32'(p12) + 32'(p13) + 32'(p14) + 32'(p15); // we add the result together
 
-      mac_base_acc = req_o.is_first_block ? $signed(req_o.req.rs[2]) : acc_q;
-      mac_next_acc = mac_base_acc + partial_sum;
+    end
+  end
+
+  // MAC pipeline register.  This is the timing cut: Stage 1 ends at
+  // partial_sum, while Stage 2 starts from partial_sum_pipe_q.
+  always_ff @(posedge clk_i or negedge rst_ni) begin : result_pipeline_reg
+    if (!rst_ni) begin
+      result_pipe_valid_q <= 1'b0;
+      result_pipe_req_q   <= '0;
+      partial_sum_pipe_q  <= '0;
+    end else if (x_commit_i.x_commit_kill && x_commit_valid_i) begin
+      result_pipe_valid_q <= 1'b0;
+    end else if (result_pipe_ready) begin
+      result_pipe_valid_q <= stage1_fire;
+
+      if (stage1_fire) begin
+        result_pipe_req_q  <= req_o;
+        partial_sum_pipe_q <= (is_mac16buf_ex || is_mac16buf_para_ex)
+                            ? partial_sum
+                            : 32'sd0;
+      end
     end
   end
 
 
   always_comb begin
-    x_result_o.data    = (is_mac16buf_ex || is_mac16buf_para_ex) ? mac_writeback_data : '0;
-    x_result_o.id      = req_o.req.id;
-    x_result_o.rd      = req_o.req.instr[11:7];
+    x_result_o.data = (result_pipe_req_q.is_mac16buf ||
+                       result_pipe_req_q.is_mac16buf_para)
+                    ? mac_writeback_data
+                    : '0;
 
-    // modification: for auto-accumulator mode, only the final MAC16BUF block writes back
-    // Non-final MAC16BUF instructions only update acc_q locally.
-    x_result_o.we = req_o.resp.writeback & x_result_valid_o & (is_mac16buf_ex || is_mac16buf_para_ex) & req_o.is_final_block;
+    x_result_o.id = result_pipe_req_q.req.id;
+    x_result_o.rd = result_pipe_req_q.req.instr[11:7];
+
+    // Stage 2 architectural writeback.  Metadata was captured together with
+    // the MAC result, so it always belongs to the same instruction.
+    x_result_o.we = result_pipe_req_q.resp.writeback
+                  & x_result_valid_o
+                  & (result_pipe_req_q.is_mac16buf ||
+                     result_pipe_req_q.is_mac16buf_para)
+                  & result_pipe_req_q.is_final_block;
+
     x_result_o.exc     = 1'b0;
     x_result_o.exccode = '0;
   end
